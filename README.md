@@ -18,3 +18,5 @@ Every floor has four single-use chests, loose coins and a weapon, three vials, a
 **Controls:** WASD/arrows move or bump-attack; F flares within two walking steps; H drinks a vial; period waits. Buttons support touch. Autosave needs browser storage access.
 
 **Development:** See [CONTRIBUTING.md](CONTRIBUTING.md) for module boundaries, formatting, build instructions, save compatibility and test commands. Players only need the release HTML.
+
+**Sound:** Toggle Music and Sound effects independently in the header. See [AUDIO.md](AUDIO.md) for the synth score and controls.

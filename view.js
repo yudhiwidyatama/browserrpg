@@ -4,6 +4,12 @@ const { createRenderer } = require("./src/client/renderer.cjs");
 const { renderHud } = require("./src/client/hud.cjs");
 const { bindInput } = require("./src/client/input.cjs");
 const { loadGame, saveGame } = require("./src/client/save.cjs");
+const { installAudioControls } = require("./src/client/audio/controls.cjs");
+const {
+  sceneFor,
+  observe,
+  soundsAfter,
+} = require("./src/client/audio/events.cjs");
 const newGame = () =>
   rules.fresh(crypto.getRandomValues(new Uint32Array(1))[0]);
 let game;
@@ -15,9 +21,11 @@ try {
 if (!game) game = newGame();
 const canvas = document.getElementById("map");
 const renderer = createRenderer(canvas);
+const audio = installAudioControls();
 function refresh() {
   renderHud(game);
   renderer.draw(game);
+  audio.setScene(sceneFor(game));
 }
 function persist() {
   try {
@@ -27,9 +35,12 @@ function persist() {
   }
 }
 function dispatch(action) {
-  rules.act(game, action);
+  const before = observe(game, action);
+  const accepted = rules.act(game, action);
   refresh();
   persist();
+  for (const cue of soundsAfter(before, game, action, accepted))
+    audio.effect(cue);
 }
 bindInput(
   canvas,

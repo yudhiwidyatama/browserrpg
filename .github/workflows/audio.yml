@@ -1,0 +1,46 @@
+name: Synth audio
+on: [push, pull_request]
+permissions: {contents: read}
+jobs:
+  audio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: npm ci && npm run build
+      - name: Render tones and exercise controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/esbuild tests/audio-browser.cjs --bundle --outfile=dist/audio-test.js
+          python3 -m http.server 8766 --bind 127.0.0.1 > "$RUNNER_TEMP/audio-server.log" 2>&1 &
+          server=$!
+          chromedriver --port=9515 > "$RUNNER_TEMP/audio-driver.log" 2>&1 &
+          driver=$!
+          trap 'kill "$server" "$driver" || true' EXIT
+          for i in {1..30}; do curl -fsS http://127.0.0.1:9515/status -o /dev/null && curl -fsS http://127.0.0.1:8766/tests/audio.html -o /dev/null && break; sleep .2; done
+          node --input-type=module <<'JS'
+          const base = 'http://127.0.0.1:9515';
+          async function post(path, data) {
+            const response = await fetch(base + path, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+            const result = await response.json();
+            if (!response.ok) throw Error(JSON.stringify(result));
+            return result.value;
+          }
+          const args = ['--headless', '--disable-dev-shm-usage', '--autoplay-policy=no-user-gesture-required'];
+          const alwaysMatch = { browserName: 'chrome', 'goog:chromeOptions': { args } };
+          const capabilities = { alwaysMatch };
+          const session = await post('/session', { capabilities });
+          const prefix = '/session/' + session.sessionId;
+          try {
+            await post(prefix + '/url', { url: 'http://127.0.0.1:8766/tests/audio.html' });
+            let status = 'PENDING';
+            for (let i=0; i<200 && status==='PENDING'; i++) {
+              await new Promise(resolve => setTimeout(resolve,150));
+              status = await post(prefix + '/execute/sync', { script: 'return document.getElementById("status").textContent;', args: [] });
+            }
+            if (status !== 'AUDIO_OK') throw Error('Audio browser verification: ' + status);
+            console.log(status);
+          } finally { await fetch(base+prefix,{method:'DELETE'}); }
+          JS
