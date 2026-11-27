@@ -1,6 +1,7 @@
 const G = require("../grid.cjs");
 const { surface, shops } = require("../content.cjs");
 const { createCamera } = require("./camera.cjs");
+const { paintPerson } = require("./person.cjs");
 function createRenderer(canvas) {
   const context = canvas.getContext("2d");
   const palettes = [
@@ -100,41 +101,10 @@ function createRenderer(canvas) {
   function drawActor(x, y, e) {
     if (!e) {
       ring(x, y, 0.4, "#8efaff");
-      mesh(
-        x,
-        y,
-        [
-          [0.03, 0.22],
-          [0.2, 0.32],
-          [0.65, 0.18],
-        ],
-        6,
-        "#44c4c6",
-      );
-      mesh(
-        x,
-        y,
-        [
-          [0.6, 0.16],
-          [0.73, 0.22],
-          [0.9, 0.17],
-        ],
-        6,
-        "#f9c79d",
-      );
-      mesh(
-        x,
-        y,
-        [
-          [0.85, 0.26],
-          [1.13, 0.09],
-        ],
-        6,
-        "#3b8091",
-      );
-      if (game.hero.weapon === "Lantern Staff")
-        box(x + 0.28, y, 0.37, 0.15, 0.23, "#ffc460");
-      else sword(x + 0.25, y);
+      paintPerson(context, camera, x, y, {
+        facing: game.hero.facing,
+        role: game.hero.weapon === "Lantern Staff" ? "mage" : "fighter",
+      }, 0.88);
       return;
     }
     let m = e.boss ? 1.45 : 1;
