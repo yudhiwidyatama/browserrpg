@@ -1,0 +1,10 @@
+name: Dungeon economy regression
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  economy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node tests/economy.cjs
