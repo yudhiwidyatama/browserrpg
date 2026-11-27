@@ -1,0 +1,15 @@
+name: Read audio test failure
+on:
+  push:
+    branches: [feature/synth-audio]
+    paths: [.github/workflows/audio-diagnose-once.yml]
+permissions: {actions: read, pull-requests: write}
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run view 45995764259 --repo "$GITHUB_REPOSITORY" --log-failed | tail -28 > /tmp/audio-diagnostic
+          gh pr comment 5 --repo "$GITHUB_REPOSITORY" --body-file /tmp/audio-diagnostic
