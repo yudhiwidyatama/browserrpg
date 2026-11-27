@@ -14,7 +14,11 @@ const original = fresh(17);
 for (const action of ["travel", "west", "west", "buy:hookblade"])
   assert(act(original, action));
 original.hero.flareCooldown = 2;
-assert.deepEqual(JSON.parse(encodeSave(original)), fixture);
+// New seeds use wider layouts; a newly written save must retain its own
+// generated map and the movement heading in addition to the v2 hero fields.
+const saved = JSON.parse(encodeSave(original));
+assert.deepEqual(saved.hero, { ...fixture.hero, facing: "west" });
+assert.deepEqual(decodeSave(encodeSave(original)), original);
 // A catalog-only addition must reach the HUD, dispatch, equipment, and persistence.
 const shop = atShop(game);
 shop.stock.push({ weaponId: "prism-glaive", priceInCoins: 7 });
