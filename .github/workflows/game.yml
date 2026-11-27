@@ -1,0 +1,38 @@
+name: Test and package Lantern Below
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node tests/rules.cjs && node package.cjs
+      - name: Play a turn in headless Chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8765 --bind 127.0.0.1 > "$RUNNER_TEMP/server.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid"' EXIT
+          for i in {1..20}; do curl -fsS http://127.0.0.1:8765/tests/browser.html -o /dev/null && break; sleep .2; done
+          google-chrome --headless --disable-gpu --disable-dev-shm-usage --virtual-time-budget=7000 --dump-dom http://127.0.0.1:8765/tests/browser.html > "$RUNNER_TEMP/result.html"
+          grep '<p id="status">BROWSER_OK</p>' "$RUNNER_TEMP/result.html"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lantern-below
+          path: Lantern-Below.html
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: lantern-below
+      - name: Publish offline game
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "build-${GITHUB_RUN_NUMBER}" Lantern-Below.html --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title 'Lantern Below' --notes 'Download the standalone HTML file and open it in your browser. No installation or internet connection required.'
