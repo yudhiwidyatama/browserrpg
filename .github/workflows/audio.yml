@@ -15,8 +15,27 @@ jobs:
           set -euo pipefail
           ./node_modules/.bin/esbuild tests/audio-browser.cjs --bundle --outfile=dist/audio-test.js
           python3 -m http.server 8766 --bind 127.0.0.1 > "$RUNNER_TEMP/audio-server.log" 2>&1 &
-          pid=$!
-          trap 'kill "$pid"' EXIT
-          for i in {1..20}; do curl -fsS http://127.0.0.1:8766/tests/audio.html -o /dev/null && break; sleep .2; done
-          google-chrome --headless --disable-gpu --disable-dev-shm-usage --autoplay-policy=no-user-gesture-required --virtual-time-budget=20000 --dump-dom http://127.0.0.1:8766/tests/audio.html > "$RUNNER_TEMP/audio-result.html"
-          grep '<p id="status">AUDIO_OK</p>' "$RUNNER_TEMP/audio-result.html"
+          server=$!
+          chromedriver --port=9515 > "$RUNNER_TEMP/audio-driver.log" 2>&1 &
+          driver=$!
+          trap 'kill "$server" "$driver" || true' EXIT
+          for i in {1..30}; do curl -fsS http://127.0.0.1:9515/status -o /dev/null && curl -fsS http://127.0.0.1:8766/tests/audio.html -o /dev/null && break; sleep .2; done
+          node --input-type=module <<'JS'
+          const base='http://127.0.0.1:9515';
+          async function post(path,data) {
+            const response=await fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+            const result=await response.json();if(!response.ok)throw Error(JSON.stringify(result));return result.value;
+          }
+          const session=await post('/session',{capabilities:{alwaysMatch:{browserName:'chrome','goog:chromeOptions':{args:['--headless','--disable-dev-shm-usage','--autoplay-policy=no-user-gesture-required']}}});
+          const prefix='/session/'+session.sessionId;
+          try {
+            await post(prefix+'/url',{url:'http://127.0.0.1:8766/tests/audio.html'});
+            let status='PENDING';
+            for(let i=0;i<200 && status==='PENDING';i++){
+              await new Promise(resolve=>setTimeout(resolve,150));
+              status=await post(prefix+'/execute/sync',{script:'return document.getElementById("status").textContent;',args:[]});
+            }
+            if(status!=='AUDIO_OK')throw Error('Audio browser verification: '+status);
+            console.log(status);
+          } finally { await fetch(base+prefix,{method:'DELETE'}); }
+          JS
