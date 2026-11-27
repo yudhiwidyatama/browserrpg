@@ -186,7 +186,8 @@
             <h2 id="chapter"></h2>
             <p id="goal"></p>
             <p class="muted legend">
-              Gold ring: exit · green vial: healing · cyan: you · red: foe.
+              Map: cyan = you · blue = spring · copper = chest · yellow = seal ·
+              gold ring = exit. Walk onto loot to pick it up.
             </p>
           </section>
           <section>
@@ -200,7 +201,9 @@
               <button data-act="pulse">Flare [F]</button
               ><button data-act="heal">Mend [H]</button
               ><button data-act="wait">Wait [.]</button
-              ><button data-act="exit">Use exit [E]</button>
+              ><button data-act="use">Interact [E]</button
+              ><button data-act="travel">Visit surface [R]</button
+              ><span id="shop-stock"></span>
             </div>
             <small
               >Walk into a foe to strike. Flare hits nearby foes; moving or
@@ -211,7 +214,6 @@
         </aside>
       </div>
     </main>
-    <script src="game.js"></script>
-    <script src="view.js"></script>
+    <script src="dist/lantern.js"></script>
   </body>
 </html>

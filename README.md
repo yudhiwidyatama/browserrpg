@@ -1,6 +1,6 @@
 # Lantern Below — Harbor Market expedition
 
-Download **[the standalone HTML](https://github.com/yudhiwidyatama/browserrpg/releases/latest/download/Lantern-Below.html)** and open it locally, or open `index.html` from the extracted source tree. No server, engine, external fonts or asset downloads required. The isometric camera follows the player; a minimap shows the whole floor.
+Download **[the standalone HTML](https://github.com/yudhiwidyatama/browserrpg/releases/latest/download/Lantern-Below.html)** and open it locally, or run `npm ci && npm run build` in the extracted source tree and open `index.html`. No server, engine, external fonts or asset downloads required. The isometric camera follows the player; a minimap shows the whole floor.
 
 ## Expedition
 All three floors are 21 × 21. Find the crystal seal and leave via the gold ring. In the Crown Vault also defeat the Warden. Enemies act after successful dungeon actions. Steel and magic use the equipped weapon's bonus; stronger finds equip automatically. Each third defeat earns a rank. The expanded campaign uses a separate versioned save slot and does not overwrite the original release's save.
@@ -17,4 +17,4 @@ Every floor has four single-use chests, loose coins and a weapon, three vials, a
 
 **Controls:** WASD/arrows move or bump-attack; F flares within two walking steps; H drinks a vial; period waits. Buttons support touch. Autosave needs browser storage access.
 
-**Verification:** `node tests/rules.cjs`, `node tests/economy.cjs`, and `node package.cjs`. CI also tests the packaged HTML in headless Chrome.
+**Development:** See [CONTRIBUTING.md](CONTRIBUTING.md) for module boundaries, formatting, build instructions, save compatibility and test commands. Players only need the release HTML.

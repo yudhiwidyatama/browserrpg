@@ -1,12 +1,64 @@
-<!doctype html><meta charset="utf-8"><title>Offline build smoke test</title><p id="status">PENDING</p><iframe id="app" width="900" height="800"></iframe><script>
-(async function testStandalone(){
- const frame=document.getElementById('app'),status=document.getElementById('status'),key='lantern-below-v2';
- const check=(condition,message)=>{if(!condition)throw Error(message);};
- const open=()=>new Promise(resolve=>{frame.onload=resolve;frame.src='../Lantern-Below.html?test='+Math.random();});
- const button=action=>frame.contentDocument.querySelector(`[data-act="${action}"]`);
- const saved=()=>JSON.parse(localStorage.getItem(key));
- try{
- localStorage.removeItem(key);await open();const canvas=frame.contentDocument.querySelector('canvas'),pixels=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data,colors=new Set();for(let i=0;i<pixels.length;i+=160)colors.add(`${pixels[i]},${pixels[i+1]},${pixels[i+2]}`);check(colors.size>15,'Missing dungeon geometry');button('wait').click();check(saved().turn===1,'Button did not spend one turn');const child=frame.contentWindow;child.dispatchEvent(new child.KeyboardEvent('keydown',{key:'.'}));check(saved().turn===2,'Keyboard did not spend one turn');
- const legacy=await(await fetch('fixtures/v2-market.json')).json();legacy.hero.coins=14;localStorage.setItem(key,JSON.stringify(legacy));await open();check(frame.contentDocument.getElementById('chapter').textContent==='Tide Smith','Legacy shop not restored');button('buy:tide-sabre').click();check(saved().hero.weapon==='Tide Sabre'&&saved().hero.coins===0,'Purchase failed');await open();check(saved().hero.weapon==='Tide Sabre','Equipment lost after reload');button('east').click();button('east').click();button('travel').click();check(saved().zone==='dungeon','Return lift failed');status.textContent='BROWSER_OK';
- }catch(error){status.textContent=String(error);}
-})();</script>
+<!doctype html><meta charset="utf-8" /><title>Offline build smoke test</title>
+<p id="status">PENDING</p>
+<iframe id="app" width="900" height="800"></iframe>
+<script>
+  (async function testStandalone() {
+    const frame = document.getElementById("app"),
+      status = document.getElementById("status"),
+      key = "lantern-below-v2";
+    const check = (condition, message) => {
+      if (!condition) throw Error(message);
+    };
+    const open = () =>
+      new Promise((resolve) => {
+        frame.onload = resolve;
+        frame.src = "../Lantern-Below.html?test=" + Math.random();
+      });
+    const button = (action) =>
+      frame.contentDocument.querySelector(`[data-act="${action}"]`);
+    const saved = () => JSON.parse(localStorage.getItem(key));
+    try {
+      localStorage.removeItem(key);
+      await open();
+      const canvas = frame.contentDocument.querySelector("canvas"),
+        pixels = canvas
+          .getContext("2d")
+          .getImageData(0, 0, canvas.width, canvas.height).data,
+        colors = new Set();
+      for (let i = 0; i < pixels.length; i += 160)
+        colors.add(`${pixels[i]},${pixels[i + 1]},${pixels[i + 2]}`);
+      check(colors.size > 15, "Missing dungeon geometry");
+      button("wait").click();
+      check(saved().turn === 1, "Button did not spend one turn");
+      const child = frame.contentWindow;
+      child.dispatchEvent(new child.KeyboardEvent("keydown", { key: "." }));
+      check(saved().turn === 2, "Keyboard did not spend one turn");
+      const legacy = await (await fetch("fixtures/v2-market.json")).json();
+      legacy.hero.coins = 14;
+      localStorage.setItem(key, JSON.stringify(legacy));
+      await open();
+      check(
+        frame.contentDocument.getElementById("chapter").textContent ===
+          "Tide Smith",
+        "Legacy shop not restored",
+      );
+      button("buy:tide-sabre").click();
+      check(
+        saved().hero.weapon === "Tide Sabre" && saved().hero.coins === 0,
+        "Purchase failed",
+      );
+      await open();
+      check(
+        saved().hero.weapon === "Tide Sabre",
+        "Equipment lost after reload",
+      );
+      button("east").click();
+      button("east").click();
+      button("travel").click();
+      check(saved().zone === "dungeon", "Return lift failed");
+      status.textContent = "BROWSER_OK";
+    } catch (error) {
+      status.textContent = String(error);
+    }
+  })();
+</script>

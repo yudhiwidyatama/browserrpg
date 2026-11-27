@@ -17,9 +17,12 @@ for (let seed = 0; seed < 100; seed++) {
         ...s.chests,
         ...s.vials,
       ],
-      d = G.flood(s, s.hero);
-    assert.equal(new Set(points.map((p) => G.k(p.x, p.y))).size, points.length);
-    assert(points.every((p) => d.has(G.k(p.x, p.y))));
+      d = G.walkingDistancesFrom(s, s.hero);
+    assert.equal(
+      new Set(points.map((p) => G.tileIndex(p.x, p.y))).size,
+      points.length,
+    );
+    assert(points.every((p) => d.has(G.tileIndex(p.x, p.y))));
     assert(s.loot.some((o) => o.weapon === G.themes[f - 1].weapon));
     assert(s.enemies.some((e) => e.name === G.themes[f - 1].mob));
     Object.assign(s.hero, s.exit);
@@ -54,18 +57,18 @@ G.act(s, "west");
 G.act(s, "west");
 assert.equal(G.atShop(s).name, "Tide Smith");
 h.coins = 4;
-assert(!G.act(s, "buy0"));
+assert(!G.act(s, "buy:hookblade"));
 assert.equal(h.coins, 4);
 h.coins = 14;
-assert(G.act(s, "buy1"));
+assert(G.act(s, "buy:tide-sabre"));
 assert.equal(h.coins, 0);
 assert.equal(h.weapon, "Tide Sabre");
-assert(!G.act(s, "buy1"));
+assert(!G.act(s, "buy:tide-sabre"));
 assert(!G.act(s, "travel"));
 for (let i = 0; i < 4; i++) G.act(s, "east");
 assert.equal(G.atShop(s).name, "Crown Forge");
 h.coins = 44;
-assert(G.act(s, "buy1"));
+assert(G.act(s, "buy:dawn-pike"));
 assert.equal(G.attack(h), h.power + 8);
 G.act(s, "west");
 G.act(s, "west");
