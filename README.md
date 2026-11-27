@@ -1,9 +1,20 @@
-# Lantern Below
+# Lantern Below — Harbor Market expedition
 
-A small, offline, isometric turn-based RPG. Cross the Salt Archive, Ember Foundry and Crown Vault, recover each floor's seal, and defeat the Crown Warden. Enemies move only after you spend a turn. Low-poly scenery, characters, and equipment are drawn from procedurally generated XYZ mesh rings using an orthographic camera and Canvas 2D; no engine, textures, models, external fonts or network services are required.
+Download **[the standalone HTML](https://github.com/yudhiwidyatama/browserrpg/releases/latest/download/Lantern-Below.html)** and open it locally, or open `index.html` from the extracted source tree. No server, engine, external fonts or asset downloads required. The isometric camera follows the player; a minimap shows the whole floor.
 
-**Play:** Download `Lantern-Below.html` from [the latest release](https://github.com/yudhiwidyatama/browserrpg/releases/latest) and open it in a modern browser. Alternatively download the source ZIP, extract it, and open `index.html` next to `game.js` and `view.js`. For static web hosting, deploy those three files together.
+## Expedition
+All three floors are 21 × 21. Find the crystal seal and leave via the gold ring. In the Crown Vault also defeat the Warden. Enemies act after successful dungeon actions. Steel and magic use the equipped weapon's bonus; stronger finds equip automatically. Each third defeat earns a rank. The expanded campaign uses a separate versioned save slot and does not overwrite the original release's save.
 
-**Controls:** WASD/arrows move along the isometric grid. Walk into a foe to attack. F flares within two walking steps; it takes four other turns to recharge. H spends a vial for up to 10 HP. Period waits. E uses a gold-ring exit when you have its seal. On floor 3, defeat the Warden first. Tap adjacent floor tiles or use the on-screen controls on touch devices. Three defeated foes earn a rank. The expedition autosaves when browser storage is available.
+| Floor | Foe | Signature weapon | Spring healing per drink |
+|---|---|---|---|
+| Salt Archive | Salt Scribe | Brine Knife (+2) | 8 HP |
+| Ember Foundry | Furnace Brute (slower to notice you, hits harder) | Ember Cleaver (+4) | 11 HP |
+| Crown Vault | Amethyst Shade (longer pursuit), Crown Warden | Prism Glaive (+6) | 14 HP |
 
-**Development:** `node tests/rules.cjs` runs deterministic generation and campaign tests. `node package.cjs` produces the standalone HTML. CI opens that exact build in headless Chrome and checks rendering, button and keyboard actions, and saving. No runtime or build dependencies beyond Node's standard library.
+Every floor has four single-use chests, loose coins and a weapon, three vials, and three springs placed in different distance bands. Each spring holds two drinks; using it at full health costs nothing. Foes drop coins where they fall. Walk onto loose loot; use **E** on a chest, spring, or exit. Orange chests and blue live springs appear on the minimap.
+
+**R** recalls you to Harbor Market when no foe is within two tiles. Walk west from the central lift to Tide Smith (Hookblade: 5 coins, Tide Sabre: 14), or east to Crown Forge (Sun Hammer: 26, Dawn Pike: 44). Stand on a stall and select the purchase button. Return to the gold ring and press **R**; the dungeon, opened chests, spring charges, and your position are preserved.
+
+**Controls:** WASD/arrows move or bump-attack; F flares within two walking steps; H drinks a vial; period waits. Buttons support touch. Autosave needs browser storage access.
+
+**Verification:** `node tests/rules.cjs`, `node tests/economy.cjs`, and `node package.cjs`. CI also tests the packaged HTML in headless Chrome.
