@@ -1,0 +1,25 @@
+name: Materialize scoped source changes
+on:
+  push:
+    branches: [refactor/engine-and-client]
+    paths: [.github/workflows/finish-once.yml]
+permissions: {contents: write}
+jobs:
+  finish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: |
+          set -eu
+          git show 891bd8cfab1100d8b626f58f66c5676da2552f91:.github/workflows/extract-once.yml > "$RUNNER_TEMP/extract.yml"
+          sed -n '/^          import subprocess,re$/,/^          PY$/p' "$RUNNER_TEMP/extract.yml" | sed '$d;s/^          //' > "$RUNNER_TEMP/move_geometry.py"
+          python3 "$RUNNER_TEMP/move_geometry.py"
+          npm install --package-lock-only
+          npm ci && npm run format
+          git add -- src tests index.html README.md game.js view.js package.cjs package-lock.json
+          git diff --cached --check
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Materialize readable renderer and input wiring, lock tooling, and format source'
+          git push origin HEAD:refactor/engine-and-client
