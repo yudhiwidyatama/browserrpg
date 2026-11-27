@@ -1,0 +1,25 @@
+name: Prepare regional source once
+on:
+  push:
+    branches: [feature/regional-expedition]
+    paths: [.github/workflows/prepare-regions-once.yml]
+permissions: {contents: write}
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/atlas/campaign.cjs');s=p.read_text();s=s.replace('map.enemies=base.enemies.map','if(index===0)map.crevice={...copyPoint(base.rune),looted:false};map.enemies=base.enemies.map');anchor="else if(here(map.quest)&&!map.quest.done)";assert anchor in s;s=s.replace(anchor,"else if(map.crevice&&here(map.crevice)&&!map.crevice.looted){if(!s.solo||m.role!=='mouse')return deny('A mouse could scout this drain alone.');if(!inv.give(m,'blueRing'))return deny('No space for the ring.');map.crevice.looted=true;m.xp+=4;log(s,'Pip slips between the bars and retrieves a blue ring.');}"+anchor);p.write_text(s)
+          p=Path('src/atlas/art/scene.cjs');s=p.read_text().replace("if(map.ground.some(same))", "if(map.crevice&&!map.crevice.looted&&same(map.crevice))put(k=>{k.block(0,0,.01,.59,.42,.04,'#273d3f');for(let i=-2;i<=2;i++)k.block(i*.11,0,.05,.04,.43,.045,'#a4a99e');});if(map.ground.some(same))");p.write_text(s)
+          p=Path('REGIONS.md');s=p.read_text().replace('mouse-only passages, ','');s+='\nIn the sewers, the narrow floor grate conceals a blue ring. Select Pip, switch to solo mode, stand on the grate and interact.\n';p.write_text(s)
+          p=Path('README.md');s=p.read_text();pos=s.index('\n',s.index('# '));s=s[:pos]+'\n\n**New: [Britain regional campaign](REGIONS.md).** Open the game, then select **Britain • Regional campaign** in the header. The new adventure and the classic expedition have separate saves.'+s[pos:];p.write_text(s)
+          PY
+          npm ci && npm run format
+          git add view.js src/atlas tests/atlas.cjs tests/atlas.html REGIONS.md README.md
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Finish solo mouse cache encounter and format regional campaign modules'
+          git push origin HEAD:feature/regional-expedition
