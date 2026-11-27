@@ -1,5 +1,217 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#101a27"><title>Lantern Below · an isometric dungeon RPG</title>
-<style>
-*{box-sizing:border-box}body{margin:0;color:#e8e8d9;background:#101824;font:16px/1.45 system-ui,sans-serif}main{max-width:1160px;margin:auto;padding:16px}header,.bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}h1{font:700 clamp(24px,5vw,43px) Georgia,serif;margin:0;color:#ffe6a4}small,.muted{color:#afc2c9}.game{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:12px;margin-top:12px}.stage,aside{border:1px solid #394955;border-radius:12px;background:#172534}.stage{position:relative;overflow:hidden}canvas{width:100%;height:auto;aspect-ratio:1.55;display:block;touch-action:manipulation}.bar,aside{padding:12px}.bar{background:#1b2b39;color:#fff0c1;font-weight:650}h2{font:600 23px Georgia,serif;margin:5px 0;color:#ffe6a4}p{margin:8px 0}button{font:inherit;background:#253d4a;border:1px solid #526775;border-radius:7px;color:#f5f2e2;padding:8px 12px;cursor:pointer}button:focus-visible,canvas:focus-visible{outline:3px solid #ffd16b}button:hover{background:#355566}button:disabled{opacity:.5;cursor:default}.actions{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}.pad{display:grid;grid-template-columns:repeat(2,1fr);gap:5px}.pad button{font-weight:bold}.log{font-size:.87rem;list-style:none;padding:0;min-height:4em}.log li{border-top:1px solid #394957;padding:4px 0}.legend{margin-top:8px}#new{font-size:.85rem}@media(max-width:720px){main{padding:8px}.game{grid-template-columns:1fr}aside{display:grid;grid-template-columns:1fr 1fr;gap:8px}.log{grid-column:1/-1;margin:0}canvas{aspect-ratio:1.28}.bar{font-size:14px}}
-</style></head><body><main><header><div><small>TURN-BASED DUNGEON RPG</small><h1>Lantern Below</h1></div><button id="new">New expedition</button></header><div class="game"><section class="stage"><div class="bar"><span id="floor"></span><span id="stats"></span></div><canvas id="map" width="900" height="580" tabindex="0" aria-label="Isometric dungeon. Move with arrows, WASD, or the direction buttons. Walk into a foe to attack."></canvas></section><aside><section><small>FIELD NOTES</small><h2 id="chapter"></h2><p id="goal"></p><p class="muted legend">Gold ring: exit · green vial: healing · cyan: you · red: foe.</p></section><section><div class="pad" aria-label="Movement"><button data-act="north">↗ W / ↑</button><button data-act="east">↘ D / →</button><button data-act="west">↖ A / ←</button><button data-act="south">↙ S / ↓</button></div><div class="actions"><button data-act="pulse">Flare [F]</button><button data-act="heal">Mend [H]</button><button data-act="wait">Wait [.]</button><button data-act="exit">Use exit [E]</button></div><small>Walk into a foe to strike. Flare hits nearby foes; moving or fighting recharges it. Tap an adjacent tile to move.</small></section><ul class="log" id="log" aria-live="polite"></ul></aside></div></main><script src="game.js"></script><script src="view.js"></script></body></html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101a27" />
+    <title>Lantern Below · an isometric dungeon RPG</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: #e8e8d9;
+        background: #101824;
+        font:
+          16px/1.45 system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 1160px;
+        margin: auto;
+        padding: 16px;
+      }
+      header,
+      .bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      h1 {
+        font:
+          700 clamp(24px, 5vw, 43px) Georgia,
+          serif;
+        margin: 0;
+        color: #ffe6a4;
+      }
+      small,
+      .muted {
+        color: #afc2c9;
+      }
+      .game {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 260px;
+        gap: 12px;
+        margin-top: 12px;
+      }
+      .stage,
+      aside {
+        border: 1px solid #394955;
+        border-radius: 12px;
+        background: #172534;
+      }
+      .stage {
+        position: relative;
+        overflow: hidden;
+      }
+      canvas {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1.55;
+        display: block;
+        touch-action: manipulation;
+      }
+      .bar,
+      aside {
+        padding: 12px;
+      }
+      .bar {
+        background: #1b2b39;
+        color: #fff0c1;
+        font-weight: 650;
+      }
+      h2 {
+        font:
+          600 23px Georgia,
+          serif;
+        margin: 5px 0;
+        color: #ffe6a4;
+      }
+      p {
+        margin: 8px 0;
+      }
+      button {
+        font: inherit;
+        background: #253d4a;
+        border: 1px solid #526775;
+        border-radius: 7px;
+        color: #f5f2e2;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      button:focus-visible,
+      canvas:focus-visible {
+        outline: 3px solid #ffd16b;
+      }
+      button:hover {
+        background: #355566;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 12px 0;
+      }
+      .pad {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 5px;
+      }
+      .pad button {
+        font-weight: bold;
+      }
+      .log {
+        font-size: 0.87rem;
+        list-style: none;
+        padding: 0;
+        min-height: 4em;
+      }
+      .log li {
+        border-top: 1px solid #394957;
+        padding: 4px 0;
+      }
+      .legend {
+        margin-top: 8px;
+      }
+      #new {
+        font-size: 0.85rem;
+      }
+      @media (max-width: 720px) {
+        main {
+          padding: 8px;
+        }
+        .game {
+          grid-template-columns: 1fr;
+        }
+        aside {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+        }
+        .log {
+          grid-column: 1/-1;
+          margin: 0;
+        }
+        canvas {
+          aspect-ratio: 1.28;
+        }
+        .bar {
+          font-size: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <small>TURN-BASED DUNGEON RPG</small>
+          <h1>Lantern Below</h1>
+        </div>
+        <button id="new">New expedition</button>
+      </header>
+      <div class="game">
+        <section class="stage">
+          <div class="bar">
+            <span id="floor"></span><span id="stats"></span>
+          </div>
+          <canvas
+            id="map"
+            width="900"
+            height="580"
+            tabindex="0"
+            aria-label="Isometric dungeon. Move with arrows, WASD, or the direction buttons. Walk into a foe to attack."
+          ></canvas>
+        </section>
+        <aside>
+          <section>
+            <small>FIELD NOTES</small>
+            <h2 id="chapter"></h2>
+            <p id="goal"></p>
+            <p class="muted legend">
+              Gold ring: exit · green vial: healing · cyan: you · red: foe.
+            </p>
+          </section>
+          <section>
+            <div class="pad" aria-label="Movement">
+              <button data-act="north">↗ W / ↑</button
+              ><button data-act="east">↘ D / →</button
+              ><button data-act="west">↖ A / ←</button
+              ><button data-act="south">↙ S / ↓</button>
+            </div>
+            <div class="actions">
+              <button data-act="pulse">Flare [F]</button
+              ><button data-act="heal">Mend [H]</button
+              ><button data-act="wait">Wait [.]</button
+              ><button data-act="exit">Use exit [E]</button>
+            </div>
+            <small
+              >Walk into a foe to strike. Flare hits nearby foes; moving or
+              fighting recharges it. Tap an adjacent tile to move.</small
+            >
+          </section>
+          <ul class="log" id="log" aria-live="polite"></ul>
+        </aside>
+      </div>
+    </main>
+    <script src="game.js"></script>
+    <script src="view.js"></script>
+  </body>
+</html>
