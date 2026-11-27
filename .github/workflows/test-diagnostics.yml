@@ -1,0 +1,15 @@
+name: Read refactor verification result
+on:
+  push:
+    branches: [refactor/format]
+    paths: [.github/workflows/test-diagnostics.yml]
+permissions: {actions: read, pull-requests: write}
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run view 45994736857 --repo "$GITHUB_REPOSITORY" --log-failed | tail -65 > /tmp/failed
+          gh pr comment 4 --repo "$GITHUB_REPOSITORY" --body-file /tmp/failed
