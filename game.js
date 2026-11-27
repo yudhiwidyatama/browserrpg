@@ -48,13 +48,11 @@ function resolveAction(game, action) {
   }
 }
 function act(game, action) {
-  return finishTurn(
-    game,
-    resolveAction(game, action),
-    action,
-    collectDefeated,
-    advanceEnemies,
-  );
+  const { x, y } = game.hero;
+  const result = resolveAction(game, action);
+  if (Object.hasOwn(grid.dirs, action) && (x !== game.hero.x || y !== game.hero.y))
+    game.hero.facing = action;
+  return finishTurn(game, result, action, collectDefeated, advanceEnemies);
 }
 module.exports = {
   ...grid,
