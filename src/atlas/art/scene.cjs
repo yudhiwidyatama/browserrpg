@@ -1,4 +1,5 @@
 const { createCamera } = require("../../client/camera.cjs");
+const { paintPerson } = require("../../client/person.cjs");
 const { paintModel } = require("./mesh.cjs");
 const { adventurer, creature } = require("./figures.cjs");
 const { landmark, terrain } = require("./scenery.cjs");
@@ -117,14 +118,7 @@ function paintScene(canvas, s) {
       .slice(0, 3)
       .sort((a, b) => (a === hero) - (b === hero))
       .forEach((m, i) =>
-        paintModel(
-          ctx,
-          camera,
-          x + 0.16 * i,
-          y - 0.13 * i,
-          (k) => adventurer(k, m),
-          m.role === "mouse" ? 0.66 : 0.87,
-        ),
+        paintPerson(ctx, camera, x + 0.16 * i, y - 0.13 * i, m, m.role === "mouse" ? 0.66 : 0.87),
       );
   }
   if (!town) {
