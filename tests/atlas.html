@@ -1,0 +1,44 @@
+<!doctype html><title>Regional campaign smoke</title>
+<p id="status">PENDING</p>
+<iframe id="app" width="1050" height="800"></iframe>
+<script>
+  const frame = document.getElementById("app");
+  frame.onload = () => {
+    try {
+      const d = frame.contentDocument,
+        w = frame.contentWindow;
+      const click = (selector) => d.querySelector(selector).click(),
+        order = (a) => click(`[data-order="${a}"]`);
+      click("#regional-campaign");
+      order("recruit");
+      if (!d.querySelector("#atlas-party").textContent.includes("Rowan"))
+        throw Error("recruit failed");
+      const classic = w.localStorage.getItem("lantern-below-v2");
+      for (const id of ["sewer", "mine", "shame", "fen"]) {
+        order("enter:" + id);
+        const canvas = d.querySelector("#atlas-map"),
+          ctx = canvas.getContext("2d");
+        const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data,
+          colors = new Set();
+        for (let i = 0; i < pixels.length; i += 160)
+          colors.add(`${pixels[i]},${pixels[i + 1]},${pixels[i + 2]}`);
+        if (colors.size < 20) throw Error("no detailed regional scene: " + id);
+        order("return");
+      }
+      click("#atlas-close");
+      const s = JSON.parse(
+        w.localStorage.getItem("lantern-regional-campaign-v1"),
+      );
+      if (
+        s.party.length !== 2 ||
+        Object.keys(s.maps).length !== 4 ||
+        classic !== w.localStorage.getItem("lantern-below-v2")
+      )
+        throw Error("save isolation failed");
+      document.getElementById("status").textContent = "ATLAS_OK";
+    } catch (e) {
+      document.getElementById("status").textContent = String(e);
+    }
+  };
+  frame.src = "../Lantern-Below.html";
+</script>

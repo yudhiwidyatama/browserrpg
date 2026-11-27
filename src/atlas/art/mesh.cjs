@@ -1,0 +1,121 @@
+// Local-space geometry: X/Y in tiles, Z in tile heights. Models contain no textures.
+const TAU = 2 * Math.PI;
+function kit(drawFace) {
+  function face(points, color) {
+    drawFace(points, color);
+  }
+  function globe(center, radii, color, sides = 8, bands = 4) {
+    const [x, y, z] = center,
+      [rx, ry, rz] = radii;
+    const vertex = (i, j) => {
+      const a = (i * TAU) / sides,
+        b = (j * Math.PI) / bands - Math.PI / 2;
+      return [
+        x + rx * Math.cos(a) * Math.cos(b),
+        y + ry * Math.sin(a) * Math.cos(b),
+        z + rz * Math.sin(b),
+      ];
+    };
+    for (let j = 0; j < bands; j++)
+      for (let i = 0; i < sides; i++)
+        face(
+          [
+            vertex(i, j),
+            vertex(i + 1, j),
+            vertex(i + 1, j + 1),
+            vertex(i, j + 1),
+          ],
+          color,
+        );
+  }
+  function beam(a, b, r, tip, color, n = 6) {
+    let v = b.map((p, i) => p - a[i]),
+      len = Math.hypot(...v);
+    if (!len) return;
+    v = v.map((p) => p / len);
+    let h = Math.hypot(v[0], v[1]),
+      u = h ? [-v[1] / h, v[0] / h, 0] : [1, 0, 0],
+      w = [
+        v[1] * u[2] - v[2] * u[1],
+        v[2] * u[0] - v[0] * u[2],
+        v[0] * u[1] - v[1] * u[0],
+      ];
+    const rim = (p, rad, i) =>
+      p.map(
+        (t, j) =>
+          t +
+          rad *
+            (u[j] * Math.cos((i * TAU) / n) + w[j] * Math.sin((i * TAU) / n)),
+      );
+    for (let i = 0; i < n; i++)
+      face(
+        [rim(a, r, i), rim(a, r, i + 1), rim(b, tip, i + 1), rim(b, tip, i)],
+        color,
+      );
+    face(
+      Array.from({ length: n }, (_, i) => rim(b, tip, i)),
+      color,
+    );
+  }
+  function block(x, y, z, w, d, h, color) {
+    const p = [
+        [x - w / 2, y - d / 2, z],
+        [x + w / 2, y - d / 2, z],
+        [x + w / 2, y + d / 2, z],
+        [x - w / 2, y + d / 2, z],
+      ],
+      top = p.map(([a, b]) => [a, b, z + h]);
+    for (let i = 0; i < 4; i++)
+      face([p[i], p[(i + 1) % 4], top[(i + 1) % 4], top[i]], color);
+    face(top, color);
+  }
+  return { globe, beam, block, face };
+}
+function shade(hex, normal) {
+  const n = parseInt(hex.slice(1), 16),
+    light = Math.max(
+      0.56,
+      Math.min(
+        1.25,
+        0.84 + 0.34 * normal[2] - 0.16 * normal[0] + 0.09 * normal[1],
+      ),
+    );
+  return `rgb(${[16, 8, 0].map((shift) => Math.min(255, Math.round(((n >> shift) & 255) * light))).join(",")})`;
+}
+function paintModel(ctx, camera, x, y, model, scale = 1) {
+  const faces = [];
+  model(
+    kit((points, color) => {
+      const p = points.map(([a, b, c]) => [
+        x + a * scale,
+        y + b * scale,
+        c * scale,
+      ]);
+      const [a, b, c] = p,
+        ab = b.map((n, i) => n - a[i]),
+        ac = c.map((n, i) => n - a[i]);
+      const normal = [
+          ab[1] * ac[2] - ab[2] * ac[1],
+          ab[2] * ac[0] - ab[0] * ac[2],
+          ab[0] * ac[1] - ab[1] * ac[0],
+        ],
+        length = Math.hypot(...normal) || 1;
+      faces.push({
+        p: p.map((q) => camera.project(...q)),
+        depth: p.reduce((sum, q) => sum + q[0] + q[1] + q[2], 0) / p.length,
+        color: shade(
+          color,
+          normal.map((n) => n / length),
+        ),
+      });
+    }),
+  );
+  for (const f of faces.sort((a, b) => a.depth - b.depth)) {
+    ctx.beginPath();
+    f.p.forEach(([a, b], i) => (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b)));
+    ctx.closePath();
+    ctx.fillStyle = f.color;
+    ctx.fill();
+  }
+}
+module.exports = { kit, paintModel };

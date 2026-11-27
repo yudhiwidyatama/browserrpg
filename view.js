@@ -4,6 +4,7 @@ const { createRenderer } = require("./src/client/renderer.cjs");
 const { renderHud } = require("./src/client/hud.cjs");
 const { bindInput } = require("./src/client/input.cjs");
 const { loadGame, saveGame } = require("./src/client/save.cjs");
+const { installAtlas } = require("./src/atlas/interface.cjs");
 const { installAudioControls } = require("./src/client/audio/controls.cjs");
 const {
   sceneFor,
@@ -60,5 +61,6 @@ document.getElementById("new").onclick = () => {
   refresh();
   persist();
 };
+installAtlas(audio, refresh);
 refresh();
 persist();
