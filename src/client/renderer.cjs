@@ -101,10 +101,11 @@ function createRenderer(canvas) {
   function drawActor(x, y, e) {
     if (!e) {
       ring(x, y, 0.4, "#8efaff");
-      paintPerson(context, camera, x, y, {
+      const person = {
         facing: game.hero.facing,
         role: game.hero.weapon === "Lantern Staff" ? "mage" : "fighter",
-      }, 0.88);
+      };
+      paintPerson(context, camera, x, y, person, 0.88);
       return;
     }
     let m = e.boss ? 1.45 : 1;
