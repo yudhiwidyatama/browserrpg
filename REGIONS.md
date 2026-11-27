@@ -6,4 +6,6 @@ Recruit at the inn, provision, then choose the Sewers, Despise, Shame or Swamp C
 
 Select a party member and toggle party/solo control. Others trail the active character in party mode and wait in solo mode. Command, Front, Rear, Flank, Berserk, Retreat and Like change companion behavior in combat. Actions and enemies resolve on the map. STR controls melee and pack limits; DEX affects hits, evasion and companion initiative; INT governs mana and spark damage. Collect and equip armor through the eight-slot character panel; both rings can be worn. Worn gear must fit STR; total gear and vials must fit twice STR. Regeneration and invisibility rings expire after 18 dungeon turns of wear. White vials reveal enemies and chests on the minimap. Four relics win the campaign.
 
-Scope: a condensed regional campaign, not an exhaustive recreation. Town services use a hub interface. The full wilderness, nested containers, mouse-only passages, dual-wield/two-hand rules, and every monster or item in the reference guide are not implemented.
+Scope: a condensed regional campaign, not an exhaustive recreation. Town services use a hub interface. The full wilderness, nested containers, dual-wield/two-hand rules, and every monster or item in the reference guide are not implemented.
+
+In the sewers, the narrow floor grate conceals a blue ring. Select Pip, switch to solo mode, stand on the grate and interact.

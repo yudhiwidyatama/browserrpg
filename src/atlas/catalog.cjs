@@ -1,14 +1,116 @@
 const regions = [
- {id:'sewer',name:'Sewers of Britain',subtitle:'Below the castle • sluices and iron grates',wall:'#536d67',floor:'#62807a',water:'#399c9b',foes:['rat','snake','slime'],relic:'Sluice key',reward:'redRing',hazard:'effluent'},
- {id:'mine',name:'Dungeon Despise',subtitle:'Northern mountains • timber galleries and ore seams',wall:'#786b58',floor:'#9a8463',water:'#49899c',foes:['spider','troll','bat'],relic:'Assayer’s seal',reward:'chain',hazard:'rubble'},
- {id:'shame',name:'Dungeon Shame',subtitle:'Western peaks • gold veins and haunted galleries',wall:'#685a76',floor:'#877993',water:'#7269ae',foes:['skeleton','gazer','drake'],relic:'Explorer’s map',reward:'greenRing',hazard:'haunt'},
- {id:'fen',name:'Swamp Cave',subtitle:'Eastern marsh • reed beds and flooded tunnels',wall:'#596844',floor:'#778253',water:'#739742',foes:['slime','gator','snake'],relic:'Fen lantern',reward:'boots',hazard:'bog'},
+  {
+    id: "sewer",
+    name: "Sewers of Britain",
+    subtitle: "Below the castle • sluices and iron grates",
+    wall: "#536d67",
+    floor: "#62807a",
+    water: "#399c9b",
+    foes: ["rat", "snake", "slime"],
+    relic: "Sluice key",
+    reward: "redRing",
+    hazard: "effluent",
+  },
+  {
+    id: "mine",
+    name: "Dungeon Despise",
+    subtitle: "Northern mountains • timber galleries and ore seams",
+    wall: "#786b58",
+    floor: "#9a8463",
+    water: "#49899c",
+    foes: ["spider", "troll", "bat"],
+    relic: "Assayer’s seal",
+    reward: "chain",
+    hazard: "rubble",
+  },
+  {
+    id: "shame",
+    name: "Dungeon Shame",
+    subtitle: "Western peaks • gold veins and haunted galleries",
+    wall: "#685a76",
+    floor: "#877993",
+    water: "#7269ae",
+    foes: ["skeleton", "gazer", "drake"],
+    relic: "Explorer’s map",
+    reward: "greenRing",
+    hazard: "haunt",
+  },
+  {
+    id: "fen",
+    name: "Swamp Cave",
+    subtitle: "Eastern marsh • reed beds and flooded tunnels",
+    wall: "#596844",
+    floor: "#778253",
+    water: "#739742",
+    foes: ["slime", "gator", "snake"],
+    relic: "Fen lantern",
+    reward: "boots",
+    hazard: "bog",
+  },
 ];
-const roles=[['Warden','warrior',12,7,5],['Rowan','ranger',8,12,6],['Iria','mage',5,8,14],['Finch','bard',7,10,9],['Pip','mouse',3,15,4],['Vale','scout',7,13,5],['Tamsin','healer',6,8,13],['Orin','guard',13,6,5]];
-const items={
- helm:{name:'Leather helm',slot:'head',weight:1,armor:1},coif:{name:'Chain coif',slot:'head',weight:3,armor:2},cloth:{name:'Cloth armor',slot:'body',weight:1,armor:1},chain:{name:'Chain mail',slot:'body',weight:7,armor:5},blade:{name:'Short sword',slot:'right',weight:3,damage:2},shield:{name:'Buckler',slot:'left',weight:2,armor:2},boots:{name:'Swamp boots',slot:'feet',weight:2},redRing:{name:'Protection ring',slot:'finger',weight:1,armor:5},greenRing:{name:'Regeneration ring',slot:'finger',weight:1},blueRing:{name:'Invisibility ring',slot:'finger',weight:1},collar:{name:'Spiked collar',slot:'neck',weight:2,armor:2},pick:{name:'Mining pick',slot:'right',weight:4,damage:2},};
-const slots=['head','neck','body','right','left','finger1','finger2','feet'];
-const tactics=['Command','Front','Rear','Flank','Berserk','Retreat','Like'];
-const potions=['yellow','red','green','blue','orange','purple','black','white'];
-const names={rat:'Giant rat',snake:'Fen adder',slime:'Acid slime',spider:'Giant spider',troll:'Mine troll',bat:'Cave bat',skeleton:'Skeletal sentry',gazer:'Gazer',drake:'Cinder drake',gator:'Marsh alligator'};
-module.exports={regions,roles,items,slots,tactics,potions,names};
+const roles = [
+  ["Warden", "warrior", 12, 7, 5],
+  ["Rowan", "ranger", 8, 12, 6],
+  ["Iria", "mage", 5, 8, 14],
+  ["Finch", "bard", 7, 10, 9],
+  ["Pip", "mouse", 3, 15, 4],
+  ["Vale", "scout", 7, 13, 5],
+  ["Tamsin", "healer", 6, 8, 13],
+  ["Orin", "guard", 13, 6, 5],
+];
+const items = {
+  helm: { name: "Leather helm", slot: "head", weight: 1, armor: 1 },
+  coif: { name: "Chain coif", slot: "head", weight: 3, armor: 2 },
+  cloth: { name: "Cloth armor", slot: "body", weight: 1, armor: 1 },
+  chain: { name: "Chain mail", slot: "body", weight: 7, armor: 5 },
+  blade: { name: "Short sword", slot: "right", weight: 3, damage: 2 },
+  shield: { name: "Buckler", slot: "left", weight: 2, armor: 2 },
+  boots: { name: "Swamp boots", slot: "feet", weight: 2 },
+  redRing: { name: "Protection ring", slot: "finger", weight: 1, armor: 5 },
+  greenRing: { name: "Regeneration ring", slot: "finger", weight: 1 },
+  blueRing: { name: "Invisibility ring", slot: "finger", weight: 1 },
+  collar: { name: "Spiked collar", slot: "neck", weight: 2, armor: 2 },
+  pick: { name: "Mining pick", slot: "right", weight: 4, damage: 2 },
+};
+const slots = [
+  "head",
+  "neck",
+  "body",
+  "right",
+  "left",
+  "finger1",
+  "finger2",
+  "feet",
+];
+const tactics = [
+  "Command",
+  "Front",
+  "Rear",
+  "Flank",
+  "Berserk",
+  "Retreat",
+  "Like",
+];
+const potions = [
+  "yellow",
+  "red",
+  "green",
+  "blue",
+  "orange",
+  "purple",
+  "black",
+  "white",
+];
+const names = {
+  rat: "Giant rat",
+  snake: "Fen adder",
+  slime: "Acid slime",
+  spider: "Giant spider",
+  troll: "Mine troll",
+  bat: "Cave bat",
+  skeleton: "Skeletal sentry",
+  gazer: "Gazer",
+  drake: "Cinder drake",
+  gator: "Marsh alligator",
+};
+module.exports = { regions, roles, items, slots, tactics, potions, names };

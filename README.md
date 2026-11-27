@@ -1,5 +1,7 @@
 # Lantern Below — Harbor Market expedition
 
+**New: [Britain regional campaign](REGIONS.md).** Open the game, then select **Britain • Regional campaign** in the header. The new adventure and the classic expedition have separate saves.
+
 Download **[the standalone HTML](https://github.com/yudhiwidyatama/browserrpg/releases/latest/download/Lantern-Below.html)** and open it locally, or run `npm ci && npm run build` in the extracted source tree and open `index.html`. No server, engine, external fonts or asset downloads required. The isometric camera follows the player; a minimap shows the whole floor.
 
 ## Expedition
