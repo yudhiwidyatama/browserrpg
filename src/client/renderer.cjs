@@ -194,9 +194,9 @@ function createRenderer(canvas) {
       );
     }
   }
-  function drawScenery(x, y, palette, surface) {
+  function drawScenery(x, y, onSurface) {
     const at = (p) => p.x === x && p.y === y;
-    if (surface) {
+    if (onSurface) {
       if (x === surface.lift.x && y === surface.lift.y)
         ring(x, y, 0.42, "#ffe071");
       let shop = shops.find(at);
@@ -393,7 +393,7 @@ function createRenderer(canvas) {
               palette[2],
             );
         } else {
-          drawScenery(x, y, palette, onSurface);
+          drawScenery(x, y, onSurface);
           if (x === game.hero.x && y === game.hero.y) drawActor(x, y);
         }
       }
@@ -406,9 +406,8 @@ function createRenderer(canvas) {
         context.fillStyle = col;
         context.fillRect(off + p.x * step, off + p.y * step, step, step);
       }
-      game.tiles.forEach((tileHalfHeight, i) => {
-        if (tileHalfHeight)
-          dot({ x: i % G.N, y: Math.floor(i / G.N) }, "#617078");
+      game.tiles.forEach((walkable, i) => {
+        if (walkable) dot({ x: i % G.N, y: Math.floor(i / G.N) }, "#617078");
       });
       game.fountains.filter((f) => f.charges).forEach((f) => dot(f, "#64d8ef"));
       game.chests.filter((b) => !b.open).forEach((b) => dot(b, "#c78d59"));

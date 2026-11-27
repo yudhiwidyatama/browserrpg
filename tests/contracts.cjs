@@ -53,3 +53,23 @@ for (const surface of [true, false])
 console.log(
   "Historical save, catalog-only third offer, and camera round trips passed.",
 );
+// Exercise the real world renderer even if an event handler error would be swallowed by a browser.
+const { createRenderer } = require("../src/client/renderer.cjs");
+global.devicePixelRatio = 1;
+const context = new Proxy(
+  { createLinearGradient: () => ({ addColorStop() {} }) },
+  { get: (target, key) => target[key] ?? (() => {}) },
+);
+const renderer = createRenderer({
+  getBoundingClientRect: () => ({ width: 800, height: 500 }),
+  getContext: () => context,
+});
+const expedition = fresh(31);
+renderer.draw(expedition);
+assert(act(expedition, "travel"));
+renderer.draw(expedition);
+assert.deepEqual(renderer.camera.tileAt(...renderer.camera.project(10, 10)), {
+  x: 10,
+  y: 10,
+});
+delete global.devicePixelRatio;
