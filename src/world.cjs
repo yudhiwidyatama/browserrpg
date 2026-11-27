@@ -1,4 +1,5 @@
-const { N, dirs, tileIndex, walkingDistancesFrom } = require("./grid.cjs");
+const { N, walkingDistancesFrom } = require("./grid.cjs");
+const { carveLayout } = require("./layout.cjs");
 const { themes, weapons } = require("./content.cjs");
 const { note } = require("./turns.cjs");
 function seededRandom(seed) {
@@ -8,43 +9,7 @@ function seededRandom(seed) {
     return state / 4294967296;
   };
 }
-function carveLayout(random, roomCount) {
-  const tiles = Array(N * N).fill(0),
-    stack = [{ x: 1, y: 1 }];
-  const carve = (x, y) => {
-    tiles[tileIndex(x, y)] = 1;
-  };
-  carve(1, 1);
-  while (stack.length) {
-    const cell = stack.at(-1);
-    const choices = Object.values(dirs).filter(([dx, dy]) => {
-      const x = cell.x + 2 * dx,
-        y = cell.y + 2 * dy;
-      return (
-        x > 0 && x < N - 1 && y > 0 && y < N - 1 && !tiles[tileIndex(x, y)]
-      );
-    });
-    if (!choices.length) {
-      stack.pop();
-      continue;
-    }
-    const [dx, dy] = choices[Math.floor(random() * choices.length)],
-      next = { x: cell.x + 2 * dx, y: cell.y + 2 * dy };
-    carve(cell.x + dx, cell.y + dy);
-    carve(next.x, next.y);
-    stack.push(next);
-  }
-  for (let room = 0; room < roomCount; room++) {
-    const slots = (N - 3) / 2,
-      x = 1 + 2 * Math.floor(random() * slots),
-      y = 1 + 2 * Math.floor(random() * slots);
-    for (let dx = 0; dx < 3; dx++)
-      for (let dy = 0; dy < 3; dy++) carve(x + dx, y + dy);
-  }
-  return tiles;
-}
 function buildFloor(game) {
-  // Preserve RNG call order so a seed still produces the released layout.
   const random = seededRandom(game.seed + 7919 * game.floor),
     theme = themes[game.floor - 1];
   game.tiles = carveLayout(random, theme.rooms);

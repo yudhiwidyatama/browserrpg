@@ -1,6 +1,5 @@
 const { fresh } = require("../world.cjs");
 const {
-  N,
   dirs,
   tileIndex,
   walkingDistancesFrom,
@@ -17,6 +16,7 @@ const {
   potions,
 } = require("./catalog.cjs");
 const inv = require("./inventory.cjs");
+const { step, deploy, march } = require("./formation.cjs");
 const copyPoint = (p) => ({ x: p.x, y: p.y });
 function log(s, text) {
   s.log.unshift(text);
@@ -94,7 +94,7 @@ function strike(s, m, e, bonus = 0) {
     s.party.filter((p) => p.hp).forEach((p) => (p.xp += 2));
   }
 }
-function openNeighbor(map, from, target, retreat = false) {
+function openNeighbor(map, from, target, retreat = false, allies = []) {
   const d = walkingDistancesFrom(map, target),
     here = d.get(tileIndex(from.x, from.y));
   return Object.values(dirs)
@@ -102,13 +102,14 @@ function openNeighbor(map, from, target, retreat = false) {
     .find(
       (p) =>
         walk(map, p.x, p.y) &&
+        !allies.some((a) => sameTile(a, p)) &&
         !map.enemies.some((e) => e.hp && sameTile(p, e)) &&
         (retreat
           ? d.get(tileIndex(p.x, p.y)) > here
           : d.get(tileIndex(p.x, p.y)) === here - 1),
     );
 }
-function companions(s, marked) {
+function companions(s, marked, moved) {
   const map = currentMap(s);
   if (s.solo) return;
   for (const m of living(s)
@@ -124,8 +125,8 @@ function companions(s, marked) {
     if (!e) continue;
     const gap = distance(m, e);
     if (m.tactic === "Retreat") {
-      const p = openNeighbor(map, m, e, true);
-      if (p) Object.assign(m, p);
+      const p = openNeighbor(map, m, e, true, living(s));
+      if (p && !moved.has(m)) step(m, p);
       continue;
     }
     if (
@@ -145,7 +146,7 @@ function companions(s, marked) {
       continue;
     }
     if (gap <= 1) strike(s, m, e, m.tactic === "Berserk" ? 1 : 0);
-    else {
+    else if (!moved.has(m)) {
       let target = e;
       if (m.tactic === "Flank") {
         const side = Object.values(dirs)
@@ -157,8 +158,8 @@ function companions(s, marked) {
           )[0];
         target = side || e;
       }
-      const p = openNeighbor(map, m, target);
-      if (p) Object.assign(m, p);
+      const p = openNeighbor(map, m, target, false, living(s));
+      if (p) step(m, p);
     }
   }
 }
@@ -203,6 +204,7 @@ function resolve(s, action) {
     map = currentMap(s),
     [verb, arg, slot] = action.split(":");
   let marked = null;
+  let moved = new Set();
   const deny = (text) => {
     log(s, text);
     return false;
@@ -234,7 +236,8 @@ function resolve(s, action) {
     if (!town || index < 0) return false;
     s.maps[arg] ??= mapFor(s.seed, index);
     s.zone = arg;
-    for (const member of s.party) Object.assign(member, { x: 1, y: 1 });
+    const followers = living(s).filter((other) => other !== m);
+    deploy(s.maps[arg], m, followers);
     log(s, regions[index].name);
     s.turn++;
     return true;
@@ -303,19 +306,13 @@ function resolve(s, action) {
     marked = map.enemies.find((e) => e.hp && sameTile(e, p));
     if (marked) strike(s, m, marked);
     else {
-      let trail = copyPoint(m);
-      Object.assign(m, p);
-      if (!s.solo) {
-        for (const other of living(s).filter((o) => o !== m)) {
-          const old = copyPoint(other);
-          if (distance(other, trail) <= 1) Object.assign(other, trail);
-          else {
-            const step = openNeighbor(map, other, trail);
-            if (step) Object.assign(other, step);
-          }
-          trail = old;
-        }
-      }
+      const followers = living(s).filter((o) => o !== m);
+      const ally = followers.find((o) => sameTile(o, p));
+      if (ally && (s.solo || ally.status.sleep))
+        return deny("An ally occupies that tile.");
+      if (ally) step(ally, m);
+      step(m, p);
+      if (!s.solo) moved = march(map, m, followers, ally);
       if (
         map.hazards.some((q) => sameTile(q, p)) &&
         !m.status.ward &&
@@ -376,6 +373,7 @@ function resolve(s, action) {
     } else if (spring && spring.charges && m.hp < m.max) {
       spring.charges--;
       m.hp = Math.min(m.max, m.hp + 10);
+      log(s, "Restored at the spring.");
     } else if (here(map.entrance)) return resolve(s, "return");
     else if (
       map.hazards.some(here) &&
@@ -389,7 +387,7 @@ function resolve(s, action) {
   } else if (verb !== "wait") return false;
   s.turn++;
   if (!town) {
-    companions(s, marked);
+    companions(s, marked, moved);
     enemyTurn(s);
     for (const member of living(s)) inv.upkeep(member);
     if (!living(s).length) {
