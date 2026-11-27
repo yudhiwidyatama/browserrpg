@@ -236,7 +236,8 @@ function resolve(s, action) {
     if (!town || index < 0) return false;
     s.maps[arg] ??= mapFor(s.seed, index);
     s.zone = arg;
-    deploy(s.maps[arg], m, living(s).filter((other) => other !== m));
+    const followers = living(s).filter((other) => other !== m);
+    deploy(s.maps[arg], m, followers);
     log(s, regions[index].name);
     s.turn++;
     return true;
@@ -307,7 +308,8 @@ function resolve(s, action) {
     else {
       const followers = living(s).filter((o) => o !== m);
       const ally = followers.find((o) => sameTile(o, p));
-      if (ally && (s.solo || ally.status.sleep)) return deny("An ally occupies that tile.");
+      if (ally && (s.solo || ally.status.sleep))
+        return deny("An ally occupies that tile.");
       if (ally) step(ally, m);
       step(m, p);
       if (!s.solo) moved = march(map, m, followers, ally);
@@ -341,7 +343,9 @@ function resolve(s, action) {
       m.bag.push(drop.gear);
       map.ground.splice(map.ground.indexOf(drop), 1);
     } else if (chest) {
-      if (!inv.give(m, chest.item)) return deny("Make space or select a stronger carrier.");
+      if (inv.carried(m) + items[chest.item].weight + 1 > 2 * m.str)
+        return deny("Make space or select a stronger carrier.");
+      inv.give(m, chest.item);
       m.vials[chest.potion] = (m.vials[chest.potion] || 0) + 1;
       chest.open = true;
       s.coins += 4;
@@ -369,6 +373,7 @@ function resolve(s, action) {
     } else if (spring && spring.charges && m.hp < m.max) {
       spring.charges--;
       m.hp = Math.min(m.max, m.hp + 10);
+      log(s, "Restored at the spring.");
     } else if (here(map.entrance)) return resolve(s, "return");
     else if (
       map.hazards.some(here) &&
