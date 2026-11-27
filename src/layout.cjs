@@ -15,7 +15,8 @@ function carveLayout(random, roomCount) {
     const options = Object.values(dirs).filter(([dx, dy]) => {
       const a = x + 4 * dx,
         b = y + 4 * dy;
-      return a > 0 && b > 0 && a + 3 < N && b + 3 < N && !tiles[tileIndex(a, b)];
+      if (a <= 0 || b <= 0 || a + 3 >= N || b + 3 >= N) return false;
+      return !tiles[tileIndex(a, b)];
     });
     if (!options.length) {
       stack.pop();

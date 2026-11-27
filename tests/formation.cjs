@@ -31,8 +31,20 @@ assert.equal(unique(), 8);
 map.tiles.fill(0);
 for (let x = 1; x < G.N - 1; x++)
   for (let y = 8; y <= 10; y++) map.tiles[G.tileIndex(x, y)] = 1;
-const ranks = [[5, 9], [5, 8], [5, 10], [4, 9], [4, 8], [4, 10], [3, 8], [3, 10]];
-s.party.forEach((m, i) => Object.assign(m, { x: ranks[i][0], y: ranks[i][1] }));
+const ranks = [
+  [5, 9],
+  [5, 8],
+  [5, 10],
+  [4, 9],
+  [4, 8],
+  [4, 10],
+  [3, 8],
+  [3, 10],
+];
+s.party.forEach((m, i) => {
+  const [x, y] = ranks[i];
+  Object.assign(m, { x, y });
+});
 for (let i = 1; i <= 5; i++) {
   assert(resolve(s, "east"));
   s.party.forEach((m, j) => {
@@ -45,8 +57,9 @@ assert(resolve(s, "north"));
 assert.equal(s.party[0].facing, "north");
 assert.equal(s.party[1].facing, "south");
 assert.equal(unique(), 8);
-const before = s.party.map((m) => [m.x, m.y, m.facing]);
+const snapshot = () => s.party.map((m) => [m.x, m.y, m.facing]);
+const before = snapshot();
 assert(!resolve(s, "north"));
 assert(resolve(s, "wait"));
-assert.deepEqual(s.party.map((m) => [m.x, m.y, m.facing]), before);
-console.log("Cardinal headings, passage width and eight-member formation verified.");
+assert.deepEqual(snapshot(), before);
+console.log("Headings, passage width and eight-member formation verified.");
