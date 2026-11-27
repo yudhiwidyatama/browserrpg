@@ -1,0 +1,22 @@
+name: Synth audio
+on: [push, pull_request]
+permissions: {contents: read}
+jobs:
+  audio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: npm ci && npm run build
+      - name: Render tones and exercise controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/esbuild tests/audio-browser.cjs --bundle --outfile=dist/audio-test.js
+          python3 -m http.server 8766 --bind 127.0.0.1 > "$RUNNER_TEMP/audio-server.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid"' EXIT
+          for i in {1..20}; do curl -fsS http://127.0.0.1:8766/tests/audio.html -o /dev/null && break; sleep .2; done
+          google-chrome --headless --disable-gpu --disable-dev-shm-usage --autoplay-policy=no-user-gesture-required --virtual-time-budget=20000 --dump-dom http://127.0.0.1:8766/tests/audio.html > "$RUNNER_TEMP/audio-result.html"
+          grep '<p id="status">AUDIO_OK</p>' "$RUNNER_TEMP/audio-result.html"
