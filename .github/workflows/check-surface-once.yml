@@ -1,0 +1,31 @@
+name: Check both render paths
+on:
+  push:
+    branches: [refactor/engine-and-client]
+    paths: [.github/workflows/check-surface-once.yml]
+permissions: {contents: write}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/client/renderer.cjs');s=p.read_text();assert 'drawScenery(x, y, palette, surface)' in s;s=s.replace('drawScenery(x, y, palette, surface)','drawScenery(x, y, onSurface)').replace('drawScenery(x, y, palette, onSurface)','drawScenery(x, y, onSurface)').replace('if (surface) {','if (onSurface) {').replace('game.tiles.forEach((tileHalfHeight, i)', 'game.tiles.forEach((walkable, i)').replace('if (tileHalfHeight)','if (walkable)');p.write_text(s)
+          PY
+          cat >> tests/contracts.cjs <<'JS'
+          // Exercise the real world renderer even if an event handler error would be swallowed by a browser.
+          const {createRenderer}=require('../src/client/renderer.cjs');
+          global.devicePixelRatio=1;
+          const context=new Proxy({createLinearGradient:()=>({addColorStop(){}})},{get:(target,key)=>target[key]??(()=>{})});
+          const renderer=createRenderer({getBoundingClientRect:()=>({width:800,height:500}),getContext:()=>context});
+          const expedition=fresh(31);renderer.draw(expedition);assert(act(expedition,'travel'));renderer.draw(expedition);assert.deepEqual(renderer.camera.tileAt(...renderer.camera.project(10,10)),{x:10,y:10});delete global.devicePixelRatio;
+          JS
+          npm ci && npm run format
+          git add src/client/renderer.cjs tests/contracts.cjs
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Disambiguate surface flag and test rendering the market and dungeon'
+          git push origin HEAD:refactor/engine-and-client
+          npm test && npm run build
