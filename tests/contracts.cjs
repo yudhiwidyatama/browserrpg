@@ -33,7 +33,7 @@ try {
   const restored = decodeSave(encodeSave(game));
   assert.equal(restored.hero.weapon, "Prism Glaive");
   assert.equal(restored.hero.coins, 0);
-  assert.equal(attack(restored), restored.hero.power + 6);
+  assert.equal(attack(restored.hero), restored.hero.power + 6);
 } finally {
   shop.stock.pop();
 }
