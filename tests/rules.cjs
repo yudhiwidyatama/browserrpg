@@ -5,14 +5,17 @@ for (let seed = 0; seed < 100; seed++) {
   const s = G.fresh(seed);
   assert.deepEqual(s, G.fresh(seed));
   for (let f = 1; f <= 3; f++) {
-    const d = G.flood(s, s.hero);
+    const d = G.walkingDistancesFrom(s, s.hero);
     assert.equal(
       d.size,
       s.tiles.reduce((a, b) => a + b, 0),
     );
     const pts = [s.hero, s.rune, s.exit, ...s.vials, ...s.enemies];
-    assert.equal(new Set(pts.map((p) => G.k(p.x, p.y))).size, pts.length);
-    assert(pts.every((p) => d.has(G.k(p.x, p.y))));
+    assert.equal(
+      new Set(pts.map((p) => G.tileIndex(p.x, p.y))).size,
+      pts.length,
+    );
+    assert(pts.every((p) => d.has(G.tileIndex(p.x, p.y))));
     assert.equal(G.act(s, "north"), false);
     let t = s.turn;
     assert.equal(G.act(s, "exit"), false);
@@ -32,22 +35,23 @@ function play(seed) {
   const s = G.fresh(seed);
   for (let t = 0; s.state === "playing" && t < 1800; t++) {
     const h = s.hero,
-      d = G.flood(s, h),
-      near = s.enemies.filter((e) => d.get(G.k(e.x, e.y)) <= 2);
+      d = G.walkingDistancesFrom(s, h),
+      near = s.enemies.filter((e) => d.get(G.tileIndex(e.x, e.y)) <= 2);
     let a;
     if (h.hp <= 9 && h.potions) a = "heal";
-    else if (!h.cd && near.length) a = "pulse";
+    else if (!h.flareCooldown && near.length) a = "pulse";
     else {
-      const touching = near.find((e) => G.dist(h, e) === 1),
+      const touching = near.find((e) => G.manhattanDistance(h, e) === 1),
         boss = s.enemies.find((e) => e.boss);
       const target = touching || (!s.seal ? s.rune : boss || s.exit);
-      if (G.dist(target, h) === 0) a = "exit";
+      if (G.manhattanDistance(target, h) === 0) a = "exit";
       else {
-        const m = G.flood(s, target);
+        const m = G.walkingDistancesFrom(s, target);
         a = Object.entries(G.dirs).find(
           ([_, [dx, dy]]) =>
             G.walk(s, h.x + dx, h.y + dy) &&
-            m.get(G.k(h.x + dx, h.y + dy)) === m.get(G.k(h.x, h.y)) - 1,
+            m.get(G.tileIndex(h.x + dx, h.y + dy)) ===
+              m.get(G.tileIndex(h.x, h.y)) - 1,
         )?.[0];
       }
     }

@@ -1,0 +1,11 @@
+{
+  "name": "lantern-below",
+  "private": true,
+  "scripts": {
+    "build": "node package.cjs",
+    "test": "node tests/rules.cjs && node tests/economy.cjs && node tests/turns.cjs && node tests/contracts.cjs",
+    "format": "prettier --write game.js view.js package.cjs src tests index.html",
+    "format:check": "prettier --check game.js view.js package.cjs src tests index.html"
+  },
+  "devDependencies": { "esbuild": "0.25.12", "prettier": "3.6.2" }
+}

@@ -1,13 +1,14 @@
 name: Test and package Lantern Below
 on: [push, pull_request]
-permissions:
-  contents: read
+permissions: {contents: read}
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: node tests/rules.cjs && node package.cjs
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: npm ci && npm run format:check && npm test && npm run build
       - name: Play a turn in headless Chrome
         shell: bash
         run: |
@@ -19,19 +20,15 @@ jobs:
           google-chrome --headless --disable-gpu --disable-dev-shm-usage --virtual-time-budget=7000 --dump-dom http://127.0.0.1:8765/tests/browser.html > "$RUNNER_TEMP/result.html"
           grep '<p id="status">BROWSER_OK</p>' "$RUNNER_TEMP/result.html"
       - uses: actions/upload-artifact@v4
-        with:
-          name: lantern-below
-          path: Lantern-Below.html
+        with: {name: lantern-below, path: Lantern-Below.html}
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: verify
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    permissions: {contents: write}
     steps:
       - uses: actions/download-artifact@v4
-        with:
-          name: lantern-below
+        with: {name: lantern-below}
       - name: Publish offline game
         env:
           GH_TOKEN: ${{ github.token }}
