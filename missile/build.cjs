@@ -4,7 +4,6 @@
 //
 //   node missile/build.cjs   ->   missile/dist/Missile-Defense.html
 //                                 missile/dist/core.wasm, missile/dist/missile.js
-//                                 missile/dist/web/ (same game as index.html + part files)
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -53,16 +52,26 @@ load("main.cjs");
   fs.writeFileSync(path.join(dist, "core.wasm"), core.wasm);
   fs.writeFileSync(path.join(dist, "missile.js"), script);
   fs.writeFileSync(path.join(dist, "Missile-Defense.html"), html);
-  const web = writeWeb(modules, template);
+  const web = writeWeb(modules, template, core);
   return { wasmBytes: core.wasm.length, htmlBytes: Buffer.byteLength(html), html, script, web };
 }
 
 // Multi-file variant of the same game (dist/web/index.html + part files). It works from file://
 // like the standalone page and is meant for committing: every file stays small enough to review.
-function writeWeb(modules, template) {
+function writeWeb(allModules, template, core) {
   const webDir = path.join(dist, "web");
   fs.rmSync(webDir, { recursive: true, force: true });
   fs.mkdirSync(webDir, { recursive: true });
+  // The WebAssembly bytes go into small wasmN.js files (base64 pieces) so each file can be
+  // reviewed and checked on its own; wasm.cjs joins them at load time.
+  const modules = { ...allModules };
+  const b64 = Buffer.from(core.wasm).toString("base64");
+  const pieces = [];
+  for (let i = 0; i < b64.length; i += 3000) pieces.push(b64.slice(i, i + 3000));
+  pieces.forEach((piece, i) => {
+    fs.writeFileSync(path.join(webDir, `wasm${i + 1}.js`), `(window.__mdw = window.__mdw || []).push("${piece}");\n`);
+  });
+  modules["wasm.cjs"] = `module.exports = { base64: window.__mdw.join(""), layout: ${JSON.stringify(core.consts)} };`;
   const wrap = (name) => `__md[${JSON.stringify(name)}] = function (module, exports, require) {\n${modules[name]}\n};\n`.replace(/<\/script/gi, "<\\/script");
   const names = Object.keys(modules).sort();
   const parts = [];
@@ -100,9 +109,11 @@ function writeWeb(modules, template) {
 `;
   fs.writeFileSync(path.join(webDir, "start.js"), loader);
   files.push("start.js");
-  const tags = files.map((f) => `<script src="${f}"></script>`).join("\n");
+  const wasmFiles = pieces.map((_, i) => `wasm${i + 1}.js`);
+  const ordered = [...wasmFiles, ...files];
+  const tags = ordered.map((f) => `<script src="${f}"></script>`).join("\n");
   fs.writeFileSync(path.join(webDir, "index.html"), template.replace("<!--BUNDLE-->", () => tags));
-  return { dir: webDir, files: ["index.html", ...files] };
+  return { dir: webDir, files: ["index.html", ...ordered] };
 }
 
 if (require.main === module) {
