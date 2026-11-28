@@ -3,7 +3,9 @@
   "private": true,
   "scripts": {
     "build": "node package.cjs",
-    "test": "node tests/rules.cjs && node tests/economy.cjs && node tests/turns.cjs && node tests/contracts.cjs && node tests/formation.cjs",
+    "build:missile": "node missile/build.cjs",
+    "test": "node tests/rules.cjs && node tests/economy.cjs && node tests/turns.cjs && node tests/contracts.cjs && node tests/formation.cjs && npm run test:missile",
+    "test:missile": "node missile/tests/mcl.cjs && node missile/tests/core.cjs && node missile/tests/audio.cjs && node missile/tests/render.cjs && node missile/tests/session.cjs && node missile/tests/app.cjs && node missile/tests/credits.cjs",
     "format": "prettier --write game.js view.js package.cjs src tests index.html",
     "format:check": "prettier --check game.js view.js package.cjs src tests index.html"
   },
