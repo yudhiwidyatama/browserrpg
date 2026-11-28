@@ -1,0 +1,55 @@
+name: Test and release Missile Defense
+on:
+  push:
+    paths: ["missile/**", ".github/workflows/missile.yml", "package.json"]
+  pull_request:
+    paths: ["missile/**", ".github/workflows/missile.yml", "package.json"]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - name: Test (Node only, no dependencies to install)
+        run: npm run test:missile
+      - name: Build
+        run: npm run build:missile
+      - name: Committed missile/dist/web is up to date
+        run: |
+          git add -N missile/dist/web
+          git diff --exit-code -- missile/dist/web || { echo "::error::missile/dist/web is stale. Run npm run build:missile and commit the result."; exit 1; }
+      - name: Open both builds in headless Chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          for page in missile/dist/Missile-Defense.html missile/dist/web/index.html; do
+            google-chrome --headless --disable-gpu --no-sandbox --disable-dev-shm-usage --virtual-time-budget=5000 --dump-dom "file://$PWD/$page" > "$RUNNER_TEMP/dom.html"
+            grep -q 'role="dialog" aria-label="Missile Defense"' "$RUNNER_TEMP/dom.html" || { echo "::error::$page did not render the menu"; exit 1; }
+            echo "$page rendered the menu"
+          done
+      - name: Package release files
+        run: |
+          mkdir release
+          cp missile/dist/Missile-Defense.html missile/dist/core.wasm release/
+          (cd missile/dist/web && zip -qr ../../../release/Missile-Defense-web.zip .)
+          (cd release && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with: {name: missile-defense, path: release/}
+  release:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions: {contents: write}
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: missile-defense, path: release}
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=""
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then flags="--prerelease"; fi
+          gh release create "missile-${GITHUB_RUN_NUMBER}" release/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Missile Defense" $flags --notes "Download Missile-Defense.html and open it in your browser. No installation or internet connection required. Missile-Defense-web.zip is the same game as separate files (open index.html); core.wasm is the compiled WebAssembly core; SHA256SUMS.txt lists checksums."
