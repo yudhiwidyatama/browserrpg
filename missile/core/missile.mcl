@@ -1,0 +1,1063 @@
+// Missile Defense: deterministic simulation core.
+//
+// Compiled to WebAssembly by tools/mcl.cjs. All state lives in linear memory so the
+// platform layer can read it directly: `m[i]` is the i-th 32-bit integer.
+//
+// Units: positions are in 1/16 pixel on a 1280 x 720 playfield (U = 16 per pixel).
+// Progress along a flight line is 0..65536. One step is 1/60 s.
+// Rules code has no access to time, randomness sources, rendering, audio or storage.
+
+memory 3;
+
+const VERSION = 1;
+const W = 20480;          // 1280 px
+const H = 11520;          // 720 px
+const GROUND = 10400;     // 650 px
+
+// ---- phases ----
+const PH_ANNOUNCE = 1;
+const PH_PLAY = 2;
+const PH_BETWEEN = 3;
+const PH_OVER = 4;
+const PH_WON = 5;
+
+// ---- input kinds ----
+const IN_FIRE = 0;        // 1, 2, 3 = fire from battery 0, 1, 2
+const IN_DETONATE = 4;
+const IN_PICK = 5;
+const IN_REBUILD = 6;
+const IN_REROLL = 7;
+const IN_CONTINUE = 8;
+
+// ---- event kinds: [kind, a, b, c, d] ----
+const E_LAUNCH = 1;       // a battery, b battery x px, c aim x px, d aim y px
+const E_DETONATE = 2;     // a manual, b x px, c y px, d radius px
+const E_KILL = 3;         // a chain size, b x px, c y px, d points
+const E_CITY_HIT = 4;     // a target
+const E_BAT_HIT = 5;      // a target
+const E_SHIELD = 6;       // a target
+const E_EMPTY = 7;
+const E_WARN = 8;
+const E_WAVE_START = 9;   // a wave, b mutator mask, c calm, d warheads
+const E_WAVE_END = 10;    // a wave, b funds earned, c wave score
+const E_PERK = 12;        // a perk, b level
+const E_OVER = 13;
+const E_WON = 14;
+const E_REBUILD = 15;     // a target, b free
+const E_SPLIT = 16;       // a x px, b y px
+const E_REROLL = 17;
+
+// ---- perks ----
+const PK_CLUSTER = 0;
+const PK_LINGER = 1;
+const PK_MAGNET = 2;
+const PK_SHIELD = 3;
+const PK_EMP = 4;
+const PK_SALVO = 5;
+const PK_RECYCLE = 6;
+const PK_AMP = 7;
+
+// ---- scalar state ----
+const S_PHASE = 0;
+const S_WAVE = 1;
+const S_SCORE = 2;
+const S_FUNDS = 3;
+const S_STEP = 4;
+const S_MODE = 5;         // 0 campaign, 1 daily, 2 endless
+const S_SEED = 6;
+const S_RNG = 8;          // 4 streams: 0 waves, 1 perk offers, 2 passives, 3 mutators
+const S_TIMER = 12;
+const S_SPAWN_LEFT = 13;
+const S_SPAWN_TOTAL = 14;
+const S_SPAWN_TIMER = 15;
+const S_MUT = 16;         // bit 1 wind, bit 2 fog, bit 4 low ammo
+const S_WIND = 17;        // units per step, signed
+const S_WAVE_SCORE0 = 18;
+const S_HIT = 19;
+const S_AMMO0 = 20;
+const S_KILLS = 21;
+const S_SERIAL = 22;
+const S_REBUILT = 23;
+const S_REROLLS = 24;
+const S_PICKED = 25;
+const S_OFFER = 26;       // 3 entries
+const S_SUM_KILLS = 29;
+const S_SUM_CITY = 30;
+const S_SUM_AMMO = 31;
+const S_SUM_CLEAN = 32;
+const S_SUM_THRIFTY = 33;
+const S_SUM_FUNDS = 34;
+const S_SHOTS = 35;
+const S_BEST_CHAIN = 36;
+const S_ENDLESS = 37;
+const S_REPLAY = 38;
+const S_LOGN = 39;
+const S_LOGPOS = 40;
+const S_LOGFULL = 41;
+const S_WARN_CD = 42;
+const S_WAVE_KILLS = 43;
+const S_LASTCHAIN = 44;
+const S_CALM = 45;
+const S_EVN = 46;
+
+// ---- small arrays ----
+const TGT_ALIVE = 64;     // 9 targets, left to right: B C C C B C C C B
+const TGT_SHIELD = 80;
+const TGT_PASS = 96;      // city passive id, -1 for batteries
+const BAT_AMMO = 112;     // 3
+const BAT_TIMER = 116;    // 3
+const PK_LVL = 120;       // 8
+const CH_N = 128;         // 64 chain counters
+const TMP = 192;          // 16 scratch
+const EV_BUF = 256;
+const EV_STRIDE = 5;
+const EV_MAX = 96;
+
+// ---- entity arrays (structure of arrays) ----
+const N_WH = 128;
+const WH_ACT = 1024;
+const WH_X = WH_ACT + N_WH;
+const WH_Y = WH_X + N_WH;
+const WH_SX = WH_Y + N_WH;
+const WH_SY = WH_SX + N_WH;
+const WH_TX = WH_SY + N_WH;
+const WH_TY = WH_TX + N_WH;
+const WH_P = WH_TY + N_WH;
+const WH_DP = WH_P + N_WH;
+const WH_TYPE = WH_DP + N_WH;     // 0 warhead, 1 splitter, 2 fast
+const WH_TGT = WH_TYPE + N_WH;
+const WH_SLOW = WH_TGT + N_WH;
+const WH_SPD = WH_SLOW + N_WH;
+const WH_SPLIT = WH_SPD + N_WH;
+
+const N_IC = 48;
+const IC_ACT = 3072;
+const IC_X = IC_ACT + N_IC;
+const IC_Y = IC_X + N_IC;
+const IC_SX = IC_Y + N_IC;
+const IC_SY = IC_SX + N_IC;
+const IC_TX = IC_SY + N_IC;
+const IC_TY = IC_TX + N_IC;
+const IC_P = IC_TY + N_IC;
+const IC_DP = IC_P + N_IC;
+const IC_BAT = IC_DP + N_IC;
+const IC_SER = IC_BAT + N_IC;
+const IC_WIND = IC_SER + N_IC;
+
+const N_BL = 96;
+const BL_ACT = 4096;
+const BL_X = BL_ACT + N_BL;
+const BL_Y = BL_X + N_BL;
+const BL_RMAX = BL_Y + N_BL;
+const BL_AGE = BL_RMAX + N_BL;
+const BL_GROW = BL_AGE + N_BL;
+const BL_HOLD = BL_GROW + N_BL;
+const BL_SHRINK = BL_HOLD + N_BL;
+const BL_GEN = BL_SHRINK + N_BL;
+const BL_CHAIN = BL_GEN + N_BL;
+const BL_BAT = BL_CHAIN + N_BL;
+const BL_R = BL_BAT + N_BL;
+
+const LOG = 8192;         // input log: [step, kind, x, y] per entry
+const LOG_MAX = 6000;
+const MEM_INTS = 49152;   // 3 pages
+
+// =====================================================================
+// helpers
+// =====================================================================
+
+fn rnd(s) {
+  let x = m[S_RNG + s];
+  x = x ^ (x << 13);
+  x = x ^ (x >>> 17);
+  x = x ^ (x << 5);
+  m[S_RNG + s] = x;
+  return x & 0x7fffffff;
+}
+
+fn rr(s, n) { return rnd(s) % n; }
+
+fn seed_stream(s, seed) {
+  let x = (seed ^ (s * 0x632BE5AB + 0x1234567)) * 2654435761 + 0x7F4A7C15;
+  if (x == 0) { x = 1; }
+  m[S_RNG + s] = x;
+  let i = 0;
+  while (i < 6) { rnd(s); i += 1; }
+  return 0;
+}
+
+fn ev(kind, a, b, c, d) {
+  let n = m[S_EVN];
+  if (n >= EV_MAX) { return 0; }
+  let o = EV_BUF + n * EV_STRIDE;
+  m[o] = kind;
+  m[o + 1] = a;
+  m[o + 2] = b;
+  m[o + 3] = c;
+  m[o + 4] = d;
+  m[S_EVN] = n + 1;
+  return 0;
+}
+
+fn pk(i) { return m[PK_LVL + i]; }
+fn tgt_x(t) { return (80 + 140 * t) * 16; }
+
+fn has_passive(id) {
+  let t = 0;
+  while (t < 9) {
+    if (m[TGT_ALIVE + t] && m[TGT_PASS + t] == id) { return 1; }
+    t += 1;
+  }
+  return 0;
+}
+
+fn count_cities() {
+  let n = 0;
+  let t = 0;
+  while (t < 9) {
+    if (t % 4 != 0 && m[TGT_ALIVE + t]) { n += 1; }
+    t += 1;
+  }
+  return n;
+}
+
+fn total_ammo() {
+  let n = 0;
+  let b = 0;
+  while (b < 3) {
+    if (m[TGT_ALIVE + b * 4]) { n += m[BAT_AMMO + b]; }
+    b += 1;
+  }
+  return n;
+}
+
+fn mag(b) {
+  if (b == 0) { return 10; }
+  if (b == 1) { return 8; }
+  return 12;
+}
+
+fn near_target(x, y) {
+  let t = 0;
+  while (t < 9) {
+    if (m[TGT_ALIVE + t]) {
+      let dx = x - tgt_x(t);
+      let dy = y - GROUND;
+      if (abs(dx) <= 640 && abs(dy) <= 640 && dx * dx + dy * dy <= 409600) { return 1; }
+    }
+    t += 1;
+  }
+  return 0;
+}
+
+fn refund(b) {
+  if (m[TGT_ALIVE + b * 4]) { m[BAT_AMMO + b] = min(m[BAT_AMMO + b] + 1, 99); }
+  return 0;
+}
+
+// =====================================================================
+// blasts
+// =====================================================================
+
+fn new_blast(x, y, rmax, gen, chain, bat, grow, hold, shrink) {
+  let b = 0;
+  while (b < N_BL) {
+    if (m[BL_ACT + b] == 0) {
+      m[BL_ACT + b] = 1;
+      m[BL_X + b] = x;
+      m[BL_Y + b] = y;
+      m[BL_RMAX + b] = max(rmax, 64);
+      m[BL_AGE + b] = 0;
+      m[BL_GROW + b] = grow;
+      m[BL_HOLD + b] = hold;
+      m[BL_SHRINK + b] = shrink;
+      m[BL_GEN + b] = gen;
+      m[BL_CHAIN + b] = chain;
+      m[BL_BAT + b] = bat;
+      m[BL_R + b] = 0;
+      return b;
+    }
+    b += 1;
+  }
+  return -1;
+}
+
+fn blast_r(b) {
+  let age = m[BL_AGE + b];
+  let g = m[BL_GROW + b];
+  let h = m[BL_HOLD + b];
+  let s = m[BL_SHRINK + b];
+  let rm = m[BL_RMAX + b];
+  if (age < g) { return rm * (age + 1) / g; }
+  if (age < g + h) { return rm; }
+  let left = g + h + s - age;
+  if (left < 0) { left = 0; }
+  return rm * left / s;
+}
+
+fn nearest_warhead(x, y) {
+  let best = -1;
+  let bd = 2000000000;
+  let w = 0;
+  while (w < N_WH) {
+    if (m[WH_ACT + w]) {
+      let dx = m[WH_X + w] - x;
+      let dy = m[WH_Y + w] - y;
+      let d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = w; }
+    }
+    w += 1;
+  }
+  return best;
+}
+
+fn update_blasts() {
+  let b = 0;
+  while (b < N_BL) {
+    if (m[BL_ACT + b]) {
+      let age = m[BL_AGE + b];
+      let total = m[BL_GROW + b] + m[BL_HOLD + b] + m[BL_SHRINK + b];
+      if (age >= total) {
+        m[BL_ACT + b] = 0;
+      } else {
+        let r = blast_r(b);
+        m[BL_R + b] = r;
+        if (m[BL_GEN + b] == 0) {
+          let lv = pk(PK_MAGNET);
+          if (lv > 0 && age < m[BL_GROW + b]) {
+            let nw = nearest_warhead(m[BL_X + b], m[BL_Y + b]);
+            if (nw >= 0) {
+              let dx = m[WH_X + nw] - m[BL_X + b];
+              let dy = m[WH_Y + nw] - m[BL_Y + b];
+              let dist = isqrt(dx * dx + dy * dy);
+              if (dist > 0) {
+                let mv = min(dist, 16 * lv);
+                m[BL_X + b] += muldiv(dx, mv, dist);
+                m[BL_Y + b] += muldiv(dy, mv, dist);
+              }
+            }
+          }
+          let el = pk(PK_EMP);
+          if (el > 0) {
+            let er = r * 3 / 2;
+            let w = 0;
+            while (w < N_WH) {
+              if (m[WH_ACT + w]) {
+                let ex = m[WH_X + w] - m[BL_X + b];
+                let ey = m[WH_Y + w] - m[BL_Y + b];
+                if (abs(ex) <= er && abs(ey) <= er && ex * ex + ey * ey <= er * er) {
+                  m[WH_SLOW + w] = 60 + 60 * el;
+                }
+              }
+              w += 1;
+            }
+          }
+        }
+        m[BL_AGE + b] = age + 1;
+      }
+    }
+    b += 1;
+  }
+  return 0;
+}
+
+// =====================================================================
+// interceptors
+// =====================================================================
+
+fn launch_ic(b, ax, ay, ser) {
+  let i = 0;
+  while (i < N_IC) {
+    if (m[IC_ACT + i] == 0) {
+      let sx = tgt_x(b * 4);
+      let sy = GROUND - 224;
+      let dx = ax - sx;
+      let dy = ay - sy;
+      let len = isqrt(dx * dx + dy * dy);
+      if (len < 160) { len = 160; }
+      let spd = 6400;
+      if (b == 0) { spd = spd * 130 / 100; }
+      if (b == 1) { spd = spd * 80 / 100; }
+      if (has_passive(1)) { spd = spd * 110 / 100; }
+      m[IC_ACT + i] = 1;
+      m[IC_X + i] = sx;
+      m[IC_Y + i] = sy;
+      m[IC_SX + i] = sx;
+      m[IC_SY + i] = sy;
+      m[IC_TX + i] = ax;
+      m[IC_TY + i] = ay;
+      m[IC_P + i] = 0;
+      m[IC_DP + i] = max(muldiv(spd, 65536, 60 * len), 1);
+      m[IC_BAT + i] = b;
+      m[IC_SER + i] = ser;
+      m[IC_WIND + i] = 0;
+      return i;
+    }
+    i += 1;
+  }
+  return -1;
+}
+
+fn detonate(i, manual) {
+  m[IC_ACT + i] = 0;
+  let b = m[IC_BAT + i];
+  let r = 960;
+  if (b == 0) { r = r * 80 / 100; }
+  if (b == 1) { r = r * 130 / 100; }
+  if (has_passive(0)) { r = r * 110 / 100; }
+  let hold = 30;
+  let ll = pk(PK_LINGER);
+  if (ll > 0) { r = r * 80 / 100; hold = 30 * (1 + ll); }
+  let x = m[IC_X + i];
+  let y = m[IC_Y + i];
+  let ser = m[IC_SER + i];
+  let cl = pk(PK_CLUSTER);
+  if (cl > 0) {
+    let rc = r * (50 + 10 * cl) / 100;
+    new_blast(x - 640, y, rc, 0, ser, b, 20, hold, 25);
+    new_blast(x + 640, y, rc, 0, ser, b, 20, hold, 25);
+    new_blast(x, y - 560, rc, 0, ser, b, 20, hold, 25);
+  } else {
+    new_blast(x, y, r, 0, ser, b, 20, hold, 25);
+  }
+  ev(E_DETONATE, manual, x / 16, y / 16, r / 16);
+  return 0;
+}
+
+fn update_interceptors() {
+  let i = 0;
+  while (i < N_IC) {
+    if (m[IC_ACT + i]) {
+      m[IC_P + i] = min(m[IC_P + i] + m[IC_DP + i], 65536);
+      m[IC_WIND + i] += m[S_WIND];
+      let p = m[IC_P + i];
+      m[IC_X + i] = clamp(m[IC_SX + i] + mulshr(m[IC_TX + i] - m[IC_SX + i], p, 16) + m[IC_WIND + i], 0, W);
+      m[IC_Y + i] = m[IC_SY + i] + mulshr(m[IC_TY + i] - m[IC_SY + i], p, 16);
+      if (p >= 65536) { detonate(i, 0); }
+    }
+    i += 1;
+  }
+  return 0;
+}
+
+fn fire(kind, xp, yp) {
+  if (m[S_PHASE] != PH_PLAY) { return 0; }
+  let x = clamp(xp, 0, 1280) * 16;
+  let y = clamp(yp, 0, 610) * 16;
+  let b = -1;
+  if (kind == 0) {
+    let best = 2000000000;
+    let k = 0;
+    while (k < 3) {
+      if (m[TGT_ALIVE + k * 4] && m[BAT_AMMO + k] > 0) {
+        let d = abs(x - tgt_x(k * 4));
+        if (d < best) { best = d; b = k; }
+      }
+      k += 1;
+    }
+  } else {
+    b = kind - 1;
+    if (m[TGT_ALIVE + b * 4] == 0 || m[BAT_AMMO + b] <= 0) { b = -1; }
+  }
+  if (b < 0) { ev(E_EMPTY, 0, 0, 0, 0); return 0; }
+  let n = 1;
+  if (b == 2 || pk(PK_SALVO) > 0) { n = 2; }
+  m[BAT_AMMO + b] -= 1;
+  m[S_SHOTS] += 1;
+  m[S_SERIAL] += 1;
+  let ser = m[S_SERIAL];
+  m[CH_N + (ser & 63)] = 0;
+  let j = 0;
+  while (j < n) {
+    let ox = 0;
+    if (n == 2) { ox = -240 + 480 * j; }
+    launch_ic(b, clamp(x + ox, 0, W), y, ser);
+    j += 1;
+  }
+  ev(E_LAUNCH, b, tgt_x(b * 4) / 16, x / 16, y / 16);
+  return 0;
+}
+
+fn manual_detonate() {
+  if (m[S_PHASE] != PH_PLAY) { return 0; }
+  let best = -1;
+  let bs = -1;
+  let i = 0;
+  while (i < N_IC) {
+    if (m[IC_ACT + i] && m[IC_SER + i] >= bs) { bs = m[IC_SER + i]; best = i; }
+    i += 1;
+  }
+  if (best < 0) { return 0; }
+  // every interceptor of the same tap (salvo) goes off together
+  let k = 0;
+  while (k < N_IC) {
+    if (m[IC_ACT + k] && m[IC_SER + k] == bs) { detonate(k, 1); }
+    k += 1;
+  }
+  return 0;
+}
+
+// =====================================================================
+// warheads
+// =====================================================================
+
+fn pick_target() {
+  let n = 0;
+  let t = 0;
+  while (t < 9) { if (m[TGT_ALIVE + t]) { n += 1; } t += 1; }
+  if (n == 0) { return -1; }
+  let r = rr(0, n);
+  let u = 0;
+  while (u < 9) {
+    if (m[TGT_ALIVE + u]) {
+      if (r == 0) { return u; }
+      r -= 1;
+    }
+    u += 1;
+  }
+  return -1;
+}
+
+fn wave_speed(w) {
+  let wv = min(w, 20);
+  let pxs = 40 + 80 * (wv - 1) / 19;
+  if (m[S_CALM]) { pxs = pxs * 80 / 100; }
+  return pxs * 16;
+}
+
+fn launch_wh(sx, sy, t, type, spd) {
+  let i = 0;
+  while (i < N_WH) {
+    if (m[WH_ACT + i] == 0) {
+      let tx = tgt_x(t);
+      let dx = tx - sx;
+      let dy = GROUND - sy;
+      let len = max(isqrt(dx * dx + dy * dy), 1);
+      m[WH_ACT + i] = 1;
+      m[WH_X + i] = sx;
+      m[WH_Y + i] = sy;
+      m[WH_SX + i] = sx;
+      m[WH_SY + i] = sy;
+      m[WH_TX + i] = tx;
+      m[WH_TY + i] = GROUND;
+      m[WH_P + i] = 0;
+      m[WH_DP + i] = max(muldiv(spd, 65536, 60 * len), 1);
+      m[WH_TYPE + i] = type;
+      m[WH_TGT + i] = t;
+      m[WH_SLOW + i] = 0;
+      m[WH_SPD + i] = spd;
+      m[WH_SPLIT + i] = 0;
+      return i;
+    }
+    i += 1;
+  }
+  return -1;
+}
+
+fn spawn() {
+  let w = m[S_WAVE];
+  let r = rr(0, 100);
+  let type = 0;
+  if (w >= 4 && r < 25) { type = 1; }
+  if (w >= 6 && r >= 80) { type = 2; }
+  let t = pick_target();
+  if (t < 0) { return 0; }
+  let x = (40 + rr(0, 1200)) * 16;
+  let spd = wave_speed(w);
+  if (type == 2) { spd = spd * 2; }
+  launch_wh(x, 0, t, type, spd);
+  return 0;
+}
+
+fn spawn_interval() {
+  let w = m[S_WAVE];
+  let base = max(24, 100 - 4 * w);
+  if (m[S_CALM]) { base = base * 13 / 10; }
+  return base + rr(0, 30);
+}
+
+fn hit_target(t) {
+  if (m[TGT_ALIVE + t] == 0) { return 0; }
+  if (m[TGT_SHIELD + t]) {
+    m[TGT_SHIELD + t] = 0;
+    ev(E_SHIELD, t, 0, 0, 0);
+    return 0;
+  }
+  m[TGT_ALIVE + t] = 0;
+  m[S_HIT] = 1;
+  if (t % 4 == 0) {
+    let b = t / 4;
+    m[BAT_AMMO + b] = 0;
+    if (has_passive(6)) { m[BAT_TIMER + b] = 600; }
+    ev(E_BAT_HIT, t, 0, 0, 0);
+  } else {
+    ev(E_CITY_HIT, t, 0, 0, 0);
+  }
+  return 0;
+}
+
+fn update_warheads() {
+  let i = 0;
+  while (i < N_WH) {
+    if (m[WH_ACT + i]) {
+      let dp = m[WH_DP + i];
+      if (m[WH_SLOW + i] > 0) {
+        m[WH_SLOW + i] -= 1;
+        dp = max(dp / 2, 1);
+      }
+      m[WH_P + i] += dp;
+      if (m[WH_P + i] >= 65536) {
+        m[WH_ACT + i] = 0;
+        hit_target(m[WH_TGT + i]);
+      } else {
+        let p = m[WH_P + i];
+        m[WH_X + i] = m[WH_SX + i] + mulshr(m[WH_TX + i] - m[WH_SX + i], p, 16);
+        m[WH_Y + i] = m[WH_SY + i] + mulshr(m[WH_TY + i] - m[WH_SY + i], p, 16);
+        if (m[WH_TYPE + i] == 1 && m[WH_SPLIT + i] == 0 && p >= 26214) {
+          m[WH_SPLIT + i] = 1;
+          let kids = 1 + rr(0, 2);
+          let k = 0;
+          while (k < kids) {
+            let t2 = pick_target();
+            if (t2 >= 0) { launch_wh(m[WH_X + i], m[WH_Y + i], t2, 0, m[WH_SPD + i]); }
+            k += 1;
+          }
+          ev(E_SPLIT, m[WH_X + i] / 16, m[WH_Y + i] / 16, 0, 0);
+        }
+        if (m[S_WARN_CD] == 0) {
+          let wx = m[WH_TX + i] - m[WH_X + i];
+          let wy = m[WH_TY + i] - m[WH_Y + i];
+          if (abs(wx) < 4000 && abs(wy) < 4000 && wx * wx + wy * wy < 16000000 && m[TGT_ALIVE + m[WH_TGT + i]]) {
+            m[S_WARN_CD] = 30;
+            ev(E_WARN, m[WH_TGT + i], 0, 0, 0);
+          }
+        }
+      }
+    }
+    i += 1;
+  }
+  return 0;
+}
+
+fn kill(w, b) {
+  let x = m[WH_X + w];
+  let y = m[WH_Y + w];
+  m[WH_ACT + w] = 0;
+  let ch = m[BL_CHAIN + b];
+  let slot = CH_N + (ch & 63);
+  m[slot] += 1;
+  let n = m[slot];
+  let pts = 0;
+  if (n <= 12) { pts = 25 * (2 * n - 1); }
+  if (near_target(x, y)) { pts += 50; }
+  m[S_SCORE] += pts;
+  m[S_KILLS] += 1;
+  m[S_WAVE_KILLS] += 1;
+  if (n > m[S_BEST_CHAIN]) { m[S_BEST_CHAIN] = n; }
+  m[S_LASTCHAIN] = n;
+  ev(E_KILL, n, x / 16, y / 16, pts);
+  let gen = m[BL_GEN + b];
+  if (gen < 1 + pk(PK_AMP)) {
+    new_blast(x, y, m[BL_RMAX + b] * 40 / 100, gen + 1, ch, m[BL_BAT + b], 10, 15, 15);
+  }
+  let bat = m[BL_BAT + b];
+  let rl = pk(PK_RECYCLE);
+  if (rl > 0 && m[S_KILLS] % (6 - rl) == 0) { refund(bat); }
+  if ((m[S_MUT] & 4) && m[S_KILLS] % 4 == 0) { refund(bat); }
+  return 0;
+}
+
+fn collide() {
+  let w = 0;
+  while (w < N_WH) {
+    if (m[WH_ACT + w]) {
+      let hit = -1;
+      let b = 0;
+      while (b < N_BL && hit < 0) {
+        let r = m[BL_R + b];
+        if (m[BL_ACT + b] && r > 0) {
+          let dx = m[WH_X + w] - m[BL_X + b];
+          let dy = m[WH_Y + w] - m[BL_Y + b];
+          if (abs(dx) <= r && abs(dy) <= r && dx * dx + dy * dy <= r * r) { hit = b; }
+        }
+        b += 1;
+      }
+      if (hit >= 0) { kill(w, hit); }
+    }
+    w += 1;
+  }
+  return 0;
+}
+
+fn barracks_tick() {
+  let b = 0;
+  while (b < 3) {
+    if (m[BAT_TIMER + b] > 0) {
+      m[BAT_TIMER + b] -= 1;
+      if (m[BAT_TIMER + b] == 0 && m[TGT_ALIVE + b * 4] == 0 && has_passive(6)) {
+        m[TGT_ALIVE + b * 4] = 1;
+        m[BAT_AMMO + b] = 4;
+        ev(E_REBUILD, b * 4, 1, 0, 0);
+      }
+    }
+    b += 1;
+  }
+  return 0;
+}
+
+// =====================================================================
+// waves, perks, flow
+// =====================================================================
+
+fn draft() {
+  let n = 0;
+  let i = 0;
+  while (i < 8) {
+    if (m[PK_LVL + i] < 3) { m[TMP + n] = i; n += 1; }
+    i += 1;
+  }
+  let k = 0;
+  while (k < 3) {
+    if (n > 0) {
+      let r = rr(1, n);
+      m[S_OFFER + k] = m[TMP + r];
+      m[TMP + r] = m[TMP + n - 1];
+      n -= 1;
+    } else {
+      m[S_OFFER + k] = -1;
+    }
+    k += 1;
+  }
+  return 0;
+}
+
+fn clear_field() {
+  let i = 0;
+  while (i < N_WH) { m[WH_ACT + i] = 0; i += 1; }
+  i = 0;
+  while (i < N_IC) { m[IC_ACT + i] = 0; i += 1; }
+  i = 0;
+  while (i < N_BL) { m[BL_ACT + i] = 0; i += 1; }
+  i = 0;
+  while (i < 64) { m[CH_N + i] = 0; i += 1; }
+  return 0;
+}
+
+fn begin_wave(w) {
+  clear_field();
+  m[S_WAVE] = w;
+  m[S_HIT] = 0;
+  m[S_REBUILT] = 0;
+  m[S_WAVE_KILLS] = 0;
+  m[S_WARN_CD] = 0;
+  m[S_WAVE_SCORE0] = m[S_SCORE];
+  m[S_CALM] = 0;
+  if (w % 4 == 0) { m[S_CALM] = 1; }
+
+  // mutators (own random stream)
+  let count = 0;
+  if (w >= 26) { count = 2; } else if (w >= 21) { count = 1; } else if (w >= 5 && (w - 5) % 3 == 0) { count = 1; }
+  let mask = 0;
+  if (count >= 1) { mask = 1 << rr(3, 3); }
+  if (count == 2) {
+    let second = mask;
+    while (second == mask) { second = 1 << rr(3, 3); }
+    mask = mask | second;
+  }
+  m[S_MUT] = mask;
+  m[S_WIND] = 0;
+  if (mask & 1) {
+    let wind = (20 + rr(3, 21)) * 16 / 60;
+    if (rr(3, 2) == 1) { wind = -wind; }
+    m[S_WIND] = wind;
+  }
+
+  // ammunition
+  let depot = has_passive(4);
+  let b = 0;
+  while (b < 3) {
+    if (m[TGT_ALIVE + b * 4]) {
+      let a = mag(b);
+      if (mask & 4) { a = 6; }
+      m[BAT_AMMO + b] = a + depot;
+    } else {
+      m[BAT_AMMO + b] = 0;
+    }
+    m[BAT_TIMER + b] = 0;
+    b += 1;
+  }
+  m[S_AMMO0] = total_ammo();
+
+  // shields
+  let t = 0;
+  while (t < 9) { m[TGT_SHIELD + t] = 0; t += 1; }
+  let left = pk(PK_SHIELD);
+  t = 0;
+  while (t < 9 && left > 0) {
+    if (t % 4 != 0 && m[TGT_ALIVE + t]) { m[TGT_SHIELD + t] = 1; left -= 1; }
+    t += 1;
+  }
+
+  // warheads
+  let n = min(8 + 2 * (w - 1), 40);
+  if (m[S_CALM]) { n = n * 6 / 10; }
+  if (w == 30) { n = n * 2; }
+  m[S_SPAWN_LEFT] = n;
+  m[S_SPAWN_TOTAL] = n;
+  m[S_SPAWN_TIMER] = 60;
+
+  m[S_PHASE] = PH_ANNOUNCE;
+  m[S_TIMER] = 120;
+  ev(E_WAVE_START, w, mask, m[S_CALM], n);
+  return 0;
+}
+
+fn game_over() {
+  m[S_PHASE] = PH_OVER;
+  ev(E_OVER, m[S_SCORE], m[S_WAVE], 0, 0);
+  return 0;
+}
+
+fn end_wave() {
+  let w = m[S_WAVE];
+  let cities = count_cities();
+  let kills = m[S_SCORE] - m[S_WAVE_SCORE0];
+  let city_b = 100 * cities;
+  let unused = total_ammo();
+  let ammo_b = 5 * unused;
+  let clean = 0;
+  if (m[S_HIT] == 0) { clean = 200; }
+  let thrifty = 0;
+  if (m[S_AMMO0] > 0 && unused * 2 >= m[S_AMMO0]) { thrifty = 150; }
+  let bonus = city_b + ammo_b + clean + thrifty;
+  m[S_SCORE] += bonus;
+  let total = kills + bonus;
+  let funds = total * 25 / 100;
+  if (has_passive(2)) { funds = funds * 115 / 100; }
+  m[S_FUNDS] += funds;
+  m[S_SUM_KILLS] = kills;
+  m[S_SUM_CITY] = city_b;
+  m[S_SUM_AMMO] = ammo_b;
+  m[S_SUM_CLEAN] = clean;
+  m[S_SUM_THRIFTY] = thrifty;
+  m[S_SUM_FUNDS] = funds;
+
+  if (w % 5 == 0) {
+    let t = 1;
+    let done = 0;
+    while (t < 9 && done == 0) {
+      if (t % 4 != 0 && m[TGT_ALIVE + t] == 0) {
+        m[TGT_ALIVE + t] = 1;
+        done = 1;
+        ev(E_REBUILD, t, 1, 0, 0);
+      }
+      t += 1;
+    }
+  }
+
+  ev(E_WAVE_END, w, funds, total, 0);
+  if (w == 30 && m[S_ENDLESS] == 0 && m[S_MODE] != 2) {
+    m[S_PHASE] = PH_WON;
+    ev(E_WON, m[S_SCORE], 0, 0, 0);
+    return 0;
+  }
+  m[S_PHASE] = PH_BETWEEN;
+  m[S_PICKED] = 0;
+  m[S_REROLLS] = 0;
+  draft();
+  if (m[S_OFFER] < 0) { m[S_PICKED] = 1; }
+  return 0;
+}
+
+fn wave_clear() {
+  if (m[S_SPAWN_LEFT] > 0) { return 0; }
+  let i = 0;
+  while (i < N_WH) { if (m[WH_ACT + i]) { return 0; } i += 1; }
+  i = 0;
+  while (i < N_IC) { if (m[IC_ACT + i]) { return 0; } i += 1; }
+  i = 0;
+  while (i < N_BL) { if (m[BL_ACT + i]) { return 0; } i += 1; }
+  return 1;
+}
+
+fn pick_perk(i) {
+  if (m[S_PHASE] != PH_BETWEEN || m[S_PICKED] || i < 0 || i > 2) { return 0; }
+  let p = m[S_OFFER + i];
+  if (p < 0) { return 0; }
+  m[PK_LVL + p] += 1;
+  m[S_PICKED] = 1;
+  ev(E_PERK, p, m[PK_LVL + p], 0, 0);
+  return 0;
+}
+
+fn rebuild(t) {
+  if (m[S_PHASE] != PH_BETWEEN || t < 0 || t > 8 || m[TGT_ALIVE + t]) { return 0; }
+  let cost = 300;
+  if (t % 4 == 0) { cost = 150; }
+  if (m[S_REBUILT] == 0 && has_passive(5)) { cost = cost / 2; }
+  if (m[S_FUNDS] < cost) { return 0; }
+  m[S_FUNDS] -= cost;
+  m[TGT_ALIVE + t] = 1;
+  m[S_REBUILT] += 1;
+  ev(E_REBUILD, t, 0, 0, 0);
+  return 0;
+}
+
+fn reroll() {
+  if (m[S_PHASE] != PH_BETWEEN || m[S_PICKED]) { return 0; }
+  let cost = 100 + 50 * m[S_REROLLS];
+  if (m[S_FUNDS] < cost) { return 0; }
+  m[S_FUNDS] -= cost;
+  m[S_REROLLS] += 1;
+  draft();
+  ev(E_REROLL, cost, 0, 0, 0);
+  return 0;
+}
+
+fn next_wave() {
+  if (m[S_PHASE] == PH_WON) {
+    m[S_ENDLESS] = 1;
+    begin_wave(m[S_WAVE] + 1);
+    return 0;
+  }
+  if (m[S_PHASE] == PH_BETWEEN && m[S_PICKED]) { begin_wave(m[S_WAVE] + 1); }
+  return 0;
+}
+
+fn apply(kind, x, y) {
+  if (kind <= 3) { return fire(kind, x, y); }
+  if (kind == IN_DETONATE) { return manual_detonate(); }
+  if (kind == IN_PICK) { return pick_perk(x); }
+  if (kind == IN_REBUILD) { return rebuild(x); }
+  if (kind == IN_REROLL) { return reroll(); }
+  if (kind == IN_CONTINUE) { return next_wave(); }
+  return 0;
+}
+
+// =====================================================================
+// exported API
+// =====================================================================
+
+export fn init(seed, mode) {
+  let i = 0;
+  while (i < MEM_INTS) { m[i] = 0; i += 1; }
+  m[S_SEED] = seed;
+  m[S_MODE] = mode;
+  seed_stream(0, seed);
+  seed_stream(1, seed);
+  seed_stream(2, seed);
+  seed_stream(3, seed);
+
+  let t = 0;
+  while (t < 9) { m[TGT_ALIVE + t] = 1; m[TGT_PASS + t] = -1; t += 1; }
+
+  // draw 6 of the 8 city passives (Fisher-Yates on the passive stream)
+  i = 0;
+  while (i < 8) { m[TMP + i] = i; i += 1; }
+  i = 7;
+  while (i > 0) {
+    let j = rr(2, i + 1);
+    let tmp = m[TMP + i];
+    m[TMP + i] = m[TMP + j];
+    m[TMP + j] = tmp;
+    i -= 1;
+  }
+  m[TGT_PASS + 1] = m[TMP];
+  m[TGT_PASS + 2] = m[TMP + 1];
+  m[TGT_PASS + 3] = m[TMP + 2];
+  m[TGT_PASS + 5] = m[TMP + 3];
+  m[TGT_PASS + 6] = m[TMP + 4];
+  m[TGT_PASS + 7] = m[TMP + 5];
+
+  begin_wave(1);
+  return 0;
+}
+
+export fn input(kind, x, y) {
+  if (m[S_REPLAY]) { return 0; }
+  let n = m[S_LOGN];
+  if (n >= LOG_MAX) {
+    m[S_LOGFULL] = 1;
+  } else {
+    let o = LOG + n * 4;
+    m[o] = m[S_STEP];
+    m[o + 1] = kind;
+    m[o + 2] = x;
+    m[o + 3] = y;
+    m[S_LOGN] = n + 1;
+  }
+  return apply(kind, x, y);
+}
+
+export fn pump() {
+  if (m[S_REPLAY] == 0) { return 0; }
+  let n = m[S_LOGN];
+  while (m[S_LOGPOS] < n && m[LOG + m[S_LOGPOS] * 4] == m[S_STEP]) {
+    let o = LOG + m[S_LOGPOS] * 4;
+    m[S_LOGPOS] += 1;
+    apply(m[o + 1], m[o + 2], m[o + 3]);
+  }
+  return 0;
+}
+
+export fn replay_begin(n) {
+  m[S_REPLAY] = 1;
+  m[S_LOGN] = n;
+  m[S_LOGPOS] = 0;
+  return 0;
+}
+
+export fn replay_end() {
+  m[S_REPLAY] = 0;
+  return 0;
+}
+
+export fn clear_events() {
+  m[S_EVN] = 0;
+  return 0;
+}
+
+export fn step() {
+  pump();
+  let ph = m[S_PHASE];
+  if (ph == PH_ANNOUNCE) {
+    m[S_STEP] += 1;
+    m[S_TIMER] -= 1;
+    if (m[S_TIMER] <= 0) { m[S_PHASE] = PH_PLAY; }
+    return 0;
+  }
+  if (ph != PH_PLAY) { return 0; }
+  m[S_STEP] += 1;
+  if (m[S_WARN_CD] > 0) { m[S_WARN_CD] -= 1; }
+  if (m[S_SPAWN_LEFT] > 0) {
+    m[S_SPAWN_TIMER] -= 1;
+    if (m[S_SPAWN_TIMER] <= 0) {
+      spawn();
+      m[S_SPAWN_LEFT] -= 1;
+      m[S_SPAWN_TIMER] = spawn_interval();
+    }
+  }
+  update_warheads();
+  update_interceptors();
+  update_blasts();
+  collide();
+  barracks_tick();
+  if (count_cities() == 0) { game_over(); return 0; }
+  if (wave_clear()) { end_wave(); }
+  return 0;
+}
+
+export fn hash() {
+  let h = 2166136261;
+  let i = 0;
+  while (i < LOG) {
+    // replay bookkeeping and the event buffer are not game state: a replayed or resumed
+    // run must hash like the live one, however often the platform layer read its events
+    let skip = 0;
+    if (i == S_REPLAY || i == S_LOGPOS || i == S_EVN) { skip = 1; }
+    if (i >= EV_BUF && i < EV_BUF + EV_MAX * EV_STRIDE) { skip = 1; }
+    if (skip == 0) { h = (h ^ m[i]) * 16777619; }
+    i += 1;
+  }
+  return h;
+}
