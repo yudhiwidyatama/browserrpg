@@ -23,9 +23,27 @@ assert.ok(built.wasmBytes < BUDGET.wasm && built.htmlBytes < BUDGET.html, "size 
   assert.ok(!/@import|<link[^>]+stylesheet/i.test(html), "no external stylesheets");
 }
 
-function boot(env) {
+// Chromium refuses synchronous WebAssembly.Module/Instance construction from buffers over 4 KB on
+// the main thread (only the Promise API is allowed there). Node has no such limit, so the page
+// runs against this stand-in: a game that compiles its core synchronously fails here as it would in Chrome.
+const MAIN_THREAD_SYNC_LIMIT = 4096;
+const chromeLike = {
+  validate: (b) => WebAssembly.validate(b),
+  compile: (b) => WebAssembly.compile(b),
+  instantiate: (b, i) => WebAssembly.instantiate(b, i),
+  Module: function (bytes) {
+    if (bytes.byteLength > MAIN_THREAD_SYNC_LIMIT) throw new RangeError("WebAssembly.Module(): Buffer size is larger than 4KB. Use WebAssembly.compile, or compile on a worker thread.");
+    return new WebAssembly.Module(bytes);
+  },
+  Instance: function (module, imports) {
+    return new WebAssembly.Instance(module, imports);
+  },
+};
+assert.ok(built.wasmBytes > MAIN_THREAD_SYNC_LIMIT, "the core is large enough that the 4 KB rule matters");
+
+async function boot(env) {
   const context = vm.createContext({
-    document: env.doc, window: env.win, WebAssembly, console,
+    document: env.doc, window: env.win, WebAssembly: chromeLike, console,
     atob: (s) => Buffer.from(s, "base64").toString("binary"),
     setInterval: () => 1, // music scheduling is exercised in tests/audio.cjs
     clearInterval: () => {},
@@ -33,18 +51,22 @@ function boot(env) {
     Math: Object.assign(Object.create(Math), { random: seededRandom }), // fixed seeds keep this test reproducible
   });
   vm.runInContext(built.script, context);
+  await env.win.__missileReady; // the page starts once WebAssembly.instantiate resolves
+  assert.ok(env.win.__missileDefense, "the game started");
   return env.win.__missileDefense;
 }
-const setup = (opts) => {
+const setup = async (opts) => {
   const env = createEnvironment(opts);
-  const app = boot(env);
+  const app = await boot(env);
   return { env, app, L: app.core.L, core: app.core, session: app.session };
 };
 const pointer = (type, x, y, extra = {}) => ({ clientX: x, clientY: y, button: 0, pointerType: "mouse", pointerId: 1, ...extra });
 
+(async () => {
+
 // ---------- menu ----------
 {
-  const { env, session } = setup();
+  const { env, session } = await setup();
   assert.match(env.text(env.ui()), /Missile Defense/);
   for (const re of [/Campaign/, /Daily seed/, /Endless/, /Watch a replay/, /Settings/]) env.button(re);
   assert.equal(env.buttons().some((b) => /Continue run/.test(b.textContent)), false, "no saved run yet");
@@ -56,7 +78,7 @@ const pointer = (type, x, y, extra = {}) => ({ clientX: x, clientY: y, button: 0
 
 // ---------- playing: mouse, keyboard, pause ----------
 {
-  const { env, core, session, L } = setup();
+  const { env, core, session, L } = await setup();
   env.button(/Campaign/).click();
   assert.equal(session.running, true);
   assert.equal(env.ui().hidden, true, "menu closes");
@@ -120,7 +142,7 @@ const pointer = (type, x, y, extra = {}) => ({ clientX: x, clientY: y, button: 0
 
 // ---------- between waves ----------
 {
-  const { env, core, session, L } = setup();
+  const { env, core, session, L } = await setup();
   env.button(/Campaign/).click();
   env.run(130);
   core.m[L.S_SPAWN_LEFT] = 0;
@@ -147,7 +169,7 @@ const pointer = (type, x, y, extra = {}) => ({ clientX: x, clientY: y, button: 0
 // ---------- game over, replay export, watching ----------
 let replayText;
 {
-  const { env, core, session, L } = setup();
+  const { env, core, session, L } = await setup();
   env.button(/Campaign/).click();
   env.run(130);
   for (const t of [1, 2, 3, 5, 6]) core.m[L.TGT_ALIVE + t] = 0;
@@ -192,7 +214,7 @@ let replayText;
     resume() { this.state = "running"; }
   }
   Ctx.made = 0;
-  const { env, session, app } = setup({ AudioContext: Ctx });
+  const { env, session, app } = await setup({ AudioContext: Ctx });
   assert.equal(Ctx.made, 0, "no audio context at page load");
   assert.equal(app.audio.sfx, false);
   assert.equal(app.audio.music, false);
@@ -220,7 +242,7 @@ let replayText;
   assert.equal(saved.settings.speed, 75);
 
   // a new page load: audio is off again, but the other settings are remembered
-  const second = setup({ AudioContext: Ctx, backing: env.store });
+  const second = await setup({ AudioContext: Ctx, backing: env.store });
   assert.equal(second.app.audio.sfx, false, "sound starts off on every load");
   assert.equal(second.session.settings.reducedMotion, true);
   assert.equal(second.session.settings.speed, 75);
@@ -236,7 +258,7 @@ let replayText;
 
 // ---------- continue a saved run after a page reload ----------
 {
-  const first = setup();
+  const first = await setup();
   first.env.button(/Campaign/).click();
   // play wave 1 through the real input path (memory edits are not recorded, so they cannot be replayed)
   const { core: fc, L: fl, env: fe } = first;
@@ -251,7 +273,7 @@ let replayText;
   first.env.buttons().filter((b) => b.classes.has("perk"))[0].click();
   first.env.button(/Start wave 2/).click();
   const hash = first.core.hash();
-  const second = setup({ backing: first.env.store });
+  const second = await setup({ backing: first.env.store });
   const cont = second.env.button(/Continue run/);
   assert.match(cont.textContent, /wave 2/);
   cont.click();
@@ -264,7 +286,7 @@ let replayText;
 {
   const env = createEnvironment();
   env.win.localStorage = { getItem() { throw new Error("denied"); }, setItem() { throw new Error("denied"); } };
-  const app = boot(env);
+  const app = await boot(env);
   assert.match(env.text(env.ui()), /storage is unavailable/);
   env.button(/Daily seed/).click();
   assert.equal(app.session.mode, 1);
@@ -272,4 +294,10 @@ let replayText;
   assert.ok(app.core.get("S_STEP") > 0);
 }
 
-console.log("app: ok");
+})().then(
+  () => console.log("app: ok"),
+  (error) => {
+    console.error(error);
+    process.exit(1);
+  },
+);
