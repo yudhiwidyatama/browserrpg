@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Missile Defense</title>
+    <style>
+      :root { color-scheme: dark; --fg: #e9f1ff; --dim: #8ea3c7; --bg: #05070d; --panel: rgba(8, 14, 28, 0.94); --accent: #5be7ff; --warn: #ffd166; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 16px/1.4 system-ui, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+      body { display: grid; place-items: center; }
+      #stage { position: relative; width: min(100vw, 177.78vh); height: min(56.25vw, 100vh); touch-action: none; user-select: none; }
+      #game { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+      #ui { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(2, 4, 10, 0.55); overflow: auto; padding: 8px; }
+      #ui[hidden], [hidden] { display: none !important; }
+      .panel { width: min(640px, 94%); max-height: 96%; overflow: auto; padding: 18px 22px; background: var(--panel); border: 1px solid #25385e; border-radius: 10px; }
+      h2 { margin: 0 0 8px; font-size: 26px; }
+      h3 { margin: 14px 0 6px; font-size: 16px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }
+      p { margin: 6px 0; }
+      .lead { font-size: 17px; }
+      .dim, small { color: var(--dim); }
+      button, select, textarea { font: inherit; color: var(--fg); background: #13203b; border: 1px solid #35528a; border-radius: 8px; padding: 10px 14px; }
+      button { cursor: pointer; min-height: 44px; }
+      button:hover:not(:disabled) { background: #1b2f58; }
+      button.primary { background: #0f5b73; border-color: var(--accent); }
+      button:disabled { opacity: 0.45; cursor: default; }
+      :focus-visible { outline: 3px solid var(--warn); outline-offset: 2px; }
+      .panel > button { display: block; width: 100%; margin: 8px 0; text-align: left; }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+      .row button { flex: 1 1 auto; }
+      .perks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .perk { display: flex; flex-direction: column; gap: 4px; text-align: left; height: 100%; }
+      .perk span { color: var(--dim); font-size: 14px; }
+      .sum { width: 100%; border-collapse: collapse; }
+      .sum td { padding: 3px 0; border-bottom: 1px solid #1d2c4d; }
+      .num { text-align: right; font-variant-numeric: tabular-nums; }
+      .opt { display: flex; align-items: center; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
+      .opt input[type="checkbox"] { width: 22px; height: 22px; }
+      .opt small { flex-basis: 100%; margin-left: 32px; }
+      textarea { width: 100%; font-family: ui-monospace, monospace; font-size: 12px; }
+      .legend { margin: 6px 0 0; padding-left: 18px; font-size: 14px; }
+      .bar { position: absolute; top: 44px; right: 10px; display: flex; gap: 8px; }
+      .bar button { min-width: 44px; padding: 6px 10px; background: rgba(19, 32, 59, 0.85); }
+      #detBtn { position: absolute; right: 14px; bottom: 90px; min-width: 120px; min-height: 64px; font-weight: bold; background: rgba(15, 91, 115, 0.9); border-color: var(--accent); }
+      body.hc { --fg: #fff; --dim: #dfe8ff; --panel: #000; }
+      body.hc .panel, body.hc button, body.hc select, body.hc textarea { border-color: #fff; }
+      @media (max-width: 700px) { .perks { grid-template-columns: 1fr; } h2 { font-size: 22px; } }
+    </style>
+  </head>
+  <body>
+    <main id="stage">
+      <canvas id="game" role="img" aria-label="Missile Defense playfield: warheads fall toward six cities and three batteries"></canvas>
+      <div class="bar">
+        <button id="speedBtn" type="button" hidden aria-label="Replay speed">1&times;</button>
+        <button id="stopBtn" type="button" hidden aria-label="Stop watching">Stop</button>
+        <button id="pauseBtn" type="button" hidden aria-label="Pause">&#10074;&#10074;</button>
+      </div>
+      <button id="detBtn" type="button" hidden>DETONATE</button>
+      <div id="ui"></div>
+    </main>
+    <noscript>This game needs JavaScript.</noscript>
+    <script src="part1.js"></script>
+<script src="part2.js"></script>
+<script src="part3.js"></script>
+<script src="part4.js"></script>
+<script src="start.js"></script>
+  </body>
+</html>
