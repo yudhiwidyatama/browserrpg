@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Astra · Five waves to dawn</title>
+<style>
+:root{color-scheme:dark;font:16px/1.5 system-ui;color:#e2eef2;background:#091322}*{box-sizing:border-box}main{max-width:1040px;margin:auto;padding:clamp(12px,3vw,32px)}header,footer,.controls{display:flex;align-items:center;justify-content:space-between;gap:.8em;flex-wrap:wrap}h1{font:600 clamp(2.4em,6vw,4.2em)/1 Georgia,serif;color:#ffdf9c;margin:.15em 0}small{letter-spacing:.18em;color:#9eb8c7}p{margin:.65em 0}.panel{border:1px solid #456077;border-radius:12px;overflow:hidden;background:#16283b}.hud{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:9px 16px;font-variant-numeric:tabular-nums}canvas{display:block;width:100%;aspect-ratio:16/9;touch-action:none;cursor:crosshair}button{background:#26435a;color:#fff4d7;border:1px solid #627e90;border-radius:7px;padding:.55em 1em;font:inherit;cursor:pointer}button:disabled{opacity:.5}button:focus-visible,canvas:focus-visible,input:focus-visible{outline:3px solid #ffdc93;outline-offset:-3px}input[type=range]{width:5em;vertical-align:middle}footer{margin-top:1em;font-size:.88em;color:#bed3df}.controls{justify-content:flex-start}.hint{color:#bed3df}#status{min-height:1.5em;color:#ffe1a3}
+</style>
+<main><header><div><small>LANTERN WATCH · LUNAR ARCADE</small><h1>Astra Missile Defense</h1></div><b>Five waves to dawn</b></header>
+<p class="hint">Click or tap to place a shield. On the playfield, aim with the arrow keys and press Space to place it. Only the solid, expanding rim catches a streak.</p>
+<div class="panel"><div class="hud"><b id="wave">Wave 1 / 5</b><span id="charges"></span><span id="score"></span></div>
+<canvas id="sky" width="960" height="540" tabindex="0" aria-label="Astra playfield. Arrow keys aim, Space places a shield, P pauses."></canvas></div>
+<p id="status" role="status">Loading the watch…</p>
+<div class="controls"><button id="action" disabled>Start watch</button><button id="restart" disabled>New run</button><button id="replay" disabled>Watch last replay</button></div>
+<footer><label><input id="mute" type="checkbox"> Mute</label><label>Effects <input id="effects" type="range" min="0" max="1" step=".05" value=".55"></label><label>City hum <input id="ambient" type="range" min="0" max="1" step=".05" value=".25"></label><label><input id="reduced" type="checkbox"> Reduced motion</label></footer>
+<noscript>Enable JavaScript and WebAssembly to play.</noscript></main>
+<script type="module" src="./play.mjs"></script></html>
