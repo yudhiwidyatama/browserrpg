@@ -15,6 +15,16 @@ function decodeBase64(text) {
 if (typeof WebAssembly === "undefined") {
   document.body.textContent = "This game needs WebAssembly, which your browser does not support.";
 } else {
-  // the handle is for debugging and for the smoke test; nothing in the game reads it
-  window.__missileDefense = start({ document, window, wasmBytes: decodeBase64(wasm.base64), layout: wasm.layout });
+  // Compile asynchronously: Chromium throws if a module over 4 KB is compiled synchronously on the
+  // main thread, and the core is larger than that. The handles are for debugging and the smoke
+  // test; nothing in the game reads them.
+  window.__missileReady = WebAssembly.instantiate(decodeBase64(wasm.base64), {})
+    .then(({ instance }) => {
+      window.__missileDefense = start({ document, window, instance, layout: wasm.layout });
+      return window.__missileDefense;
+    })
+    .catch((error) => {
+      if (typeof console !== "undefined") console.error(error);
+      document.body.textContent = `The game could not start: ${error && error.message ? error.message : error}`;
+    });
 }

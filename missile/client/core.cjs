@@ -2,8 +2,11 @@
 // Thin wrapper over the WebAssembly simulation core. The core owns all game state in
 // linear memory; this module only instantiates it, forwards inputs, and reads events.
 
-function createCore(bytes, L) {
-  const instance = new WebAssembly.Instance(new WebAssembly.Module(bytes), {});
+// `source` is an already created WebAssembly instance (the browser path) or raw bytes (Node tests).
+// Browsers refuse to compile a module over 4 KB synchronously on the main thread, so the page
+// builds the instance with the asynchronous WebAssembly.instantiate and hands it in.
+function createCore(source, L) {
+  const instance = source && source.exports ? source : new WebAssembly.Instance(new WebAssembly.Module(source), {});
   const x = instance.exports;
   const m = new Int32Array(x.memory.buffer);
   const core = {
