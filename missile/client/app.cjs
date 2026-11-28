@@ -25,7 +25,7 @@ function h(doc, tag, props = {}, ...children) {
 }
 
 function start(env) {
-  const { document: doc, window: win, wasmBytes, layout } = env;
+  const { document: doc, window: win, wasmBytes, instance, layout } = env;
   const raf = env.raf || ((fn) => win.requestAnimationFrame(fn));
   const el = (id) => doc.getElementById(id);
   const canvas = el("game");
@@ -42,7 +42,7 @@ function start(env) {
 
   const AC = env.AudioContext !== undefined ? env.AudioContext : win.AudioContext || win.webkitAudioContext || null;
   const audio = new AudioEngine(AC);
-  const core = createCore(wasmBytes, layout);
+  const core = createCore(instance || wasmBytes, layout);
   core.init(1, 0);
   const session = new Session({ core, storage, audio });
   const renderer = new Renderer(canvas, core);
