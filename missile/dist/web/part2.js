@@ -234,8 +234,11 @@ __md["core.cjs"] = function (module, exports, require) {
 // Thin wrapper over the WebAssembly simulation core. The core owns all game state in
 // linear memory; this module only instantiates it, forwards inputs, and reads events.
 
-function createCore(bytes, L) {
-  const instance = new WebAssembly.Instance(new WebAssembly.Module(bytes), {});
+// `source` is an already created WebAssembly instance (the browser path) or raw bytes (Node tests).
+// Browsers refuse to compile a module over 4 KB synchronously on the main thread, so the page
+// builds the instance with the asynchronous WebAssembly.instantiate and hands it in.
+function createCore(source, L) {
+  const instance = source && source.exports ? source : new WebAssembly.Instance(new WebAssembly.Module(source), {});
   const x = instance.exports;
   const m = new Int32Array(x.memory.buffer);
   const core = {
@@ -328,8 +331,18 @@ function decodeBase64(text) {
 if (typeof WebAssembly === "undefined") {
   document.body.textContent = "This game needs WebAssembly, which your browser does not support.";
 } else {
-  // the handle is for debugging and for the smoke test; nothing in the game reads it
-  window.__missileDefense = start({ document, window, wasmBytes: decodeBase64(wasm.base64), layout: wasm.layout });
+  // Compile asynchronously: Chromium throws if a module over 4 KB is compiled synchronously on the
+  // main thread, and the core is larger than that. The handles are for debugging and the smoke
+  // test; nothing in the game reads them.
+  window.__missileReady = WebAssembly.instantiate(decodeBase64(wasm.base64), {})
+    .then(({ instance }) => {
+      window.__missileDefense = start({ document, window, instance, layout: wasm.layout });
+      return window.__missileDefense;
+    })
+    .catch((error) => {
+      if (typeof console !== "undefined") console.error(error);
+      document.body.textContent = `The game could not start: ${error && error.message ? error.message : error}`;
+    });
 }
 
 };
